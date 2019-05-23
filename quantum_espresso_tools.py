@@ -1,3 +1,4 @@
+import numpy as np
 import seekpath
 import sys
 import os
@@ -97,6 +98,7 @@ def modify_input(in_file,
 	cutoff   = None,
 	pressure = None,
 	smearing = None,
+	qpoints  = None,
 	den_cutoff = None):
 
         input = open(in_file)
@@ -110,15 +112,16 @@ def modify_input(in_file,
                 if i in i_ignored: continue
 
 		# Replace cell parameters
-		if lattice != None:
+		if not lattice is None:
 			if "cell_parameters" in line.lower():
+				overwrite.write(line+"\n")
 				for j in range(i+1, i+4):
-					i_ignored.append(i)
-					overwrite.write(" ".join(lattice[j-i-1])+"\n")
+					i_ignored.append(j)
+					overwrite.write(" ".join([str(x) for x in lattice[j-i-1]])+"\n")
 				continue
 
 		# Replace atomic positions
-		if atoms != None:
+		if not atoms is None:
 			if "atomic_positions" in line.lower():
 				for j in range(i+1, len(lines)):
 					try:
@@ -126,16 +129,26 @@ def modify_input(in_file,
 						i_ignored.append(j)
 					except:
 						break
+				overwrite.write(line+"\n")
 				for a in atoms:
-					overwrite.write(" ".join(a)+"\n")
+					overwrite.write(" ".join([str(ai) for ai in a])+"\n")
 				continue
 
 		# Replace the kpoint grid
 		if kpoints != None:
 			if "k_points" in line.lower():
 				i_ignored.append(i+1)
-				overwrite.write("K_POINTS automatic\n")
-				overwrite.write(kpoints+"\n")
+				if len(kpoints) == 3:
+					overwrite.write("K_POINTS automatic\n")
+					overwrite.write(" ".join([str(k) for k in kpoints])+" 0 0 0\n")
+				else:
+					overwrite.write("K_POINTS (crystal)\n")
+					overwrite.write(str(len(kpoints))+"\n")
+					weight = 1/float(len(kpoints))
+					for k in kpoints:
+						kline = " ".join(str(ki) for ki in k)
+						kline += " " + str(weight)
+						overwrite.write(kline+"\n")
 				continue
 
 		# Replace the cutoff
@@ -152,7 +165,50 @@ def modify_input(in_file,
 		if smearing != None:
 			if "degauss" in line.lower():
 				line = "degauss="+str(smearing)+","
+
+		# Replace the pressure in a relax file
+		if pressure != None:
+			if "press" in line.lower():
+				line = "press="+str(pressure)+","
+
+		# Replace qpoints in el-ph coupling
+		if qpoints != None:
+			if "nq1" in line.lower():
+				line = "nq1={0},".format(qpoints[0])
+			if "nq2" in line.lower():
+				line = "nq1={0},".format(qpoints[1])
+			if "nq3" in line.lower():
+				line = "nq1={0},".format(qpoints[2])
 			
 		overwrite.write(line+"\n")
 
 	overwrite.close()
+
+# Get the path in the B.Z, interpolated to roughly
+# num_points points
+def get_bz_path(prim_geom, num_points):
+	interp_path = []
+	names = {}
+
+	pairs = prim_geom["path"]
+	for i, ab in enumerate(pairs):
+		c1 = np.array(prim_geom["point_coords"][ab[0]])
+		c2 = np.array(prim_geom["point_coords"][ab[1]])
+		fs = "{0:10.10} {1:20.20} {2:5.5} {3:10.10} {4:20.20}"
+
+		interp_path.append(c1)
+		names[len(interp_path)-1] = ab[0]
+		max_j = num_points/len(pairs)
+		for j in range(1, max_j):
+			fj = j/float(max_j)
+			interp_path.append(c1+fj*(c2-c1))
+
+		# Dont duplicate endpoints
+		if i < len(pairs) - 1:
+			if ab[1] == pairs[i+1][0]:
+				continue
+
+		interp_path.append(c2)
+		names[len(interp_path)-1] = ab[1]
+
+	return [names, interp_path]
