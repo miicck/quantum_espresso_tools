@@ -92,14 +92,15 @@ def get_primitive(infile, cart_tol=0.01, angle_tol=5):
 # and atoms in the format [[name, x, y, z], [name, x, y, z] ... ]
 # also sets the cutoff, kpoint sampling and pressure (if present)
 def modify_input(in_file,
-	lattice  = None,
-	atoms    = None,
-	kpoints  = None,
-	cutoff   = None,
-	pressure = None,
-	smearing = None,
-	qpoints  = None,
-	den_cutoff = None):
+	lattice     = None,
+	atoms       = None,
+	kpoints     = None,
+	cutoff      = None,
+	pressure    = None,
+	smearing    = None,
+	qpoints     = None,
+	calculation = None,
+	den_cutoff  = None):
 
         input = open(in_file)
         lines = input.read().split("\n")
@@ -151,6 +152,20 @@ def modify_input(in_file,
 						overwrite.write(kline+"\n")
 				continue
 
+		# Replace the calculation type
+		if calculation != None:
+			if "calculation" in line.lower():
+				line = "calculation="+calculation+","
+
+		# Replace qpoints in el-ph coupling
+		if qpoints != None:
+			if "nq1" in line.lower():
+				line = "nq1={0},".format(qpoints[0])
+			if "nq2" in line.lower():
+				line = "nq2={0},".format(qpoints[1])
+			if "nq3" in line.lower():
+				line = "nq3={0},".format(qpoints[2])
+
 		# Replace the cutoff
 		if cutoff != None:
 			if "ecutwfc" in line.lower(): 
@@ -170,15 +185,6 @@ def modify_input(in_file,
 		if pressure != None:
 			if "press" in line.lower():
 				line = "press="+str(pressure)+","
-
-		# Replace qpoints in el-ph coupling
-		if qpoints != None:
-			if "nq1" in line.lower():
-				line = "nq1={0},".format(qpoints[0])
-			if "nq2" in line.lower():
-				line = "nq2={0},".format(qpoints[1])
-			if "nq3" in line.lower():
-				line = "nq3={0},".format(qpoints[2])
 			
 		overwrite.write(line+"\n")
 
