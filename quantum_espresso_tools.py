@@ -176,9 +176,9 @@ def modify_input(in_file,
 			if "nq1" in line.lower():
 				line = "nq1={0},".format(qpoints[0])
 			if "nq2" in line.lower():
-				line = "nq1={0},".format(qpoints[1])
+				line = "nq2={0},".format(qpoints[1])
 			if "nq3" in line.lower():
-				line = "nq1={0},".format(qpoints[2])
+				line = "nq3={0},".format(qpoints[2])
 			
 		overwrite.write(line+"\n")
 
