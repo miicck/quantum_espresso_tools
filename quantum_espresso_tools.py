@@ -48,6 +48,21 @@ def parse_vc_relax(filename):
 			data["pressure"] = float(line.split("=")[-1])
         return data
 
+# Parse an scf.out file for various things
+def parse_scf_out(filename):
+
+	f = open(filename)
+	lines = f.read().split("\n")
+	f.close()
+	
+	data = {}
+
+	for i, line in enumerate(lines):
+		
+		if "Fermi energy" in line:
+			data["fermi_energy"] = float(line.split("is")[-1].split("e")[0])
+	return data
+
 # Get the seekpath representation of the primitive geometry
 # for the given input file returns [atom_names, seekpath_geom]
 def get_primitive(infile, cart_tol=0.01, angle_tol=5):
@@ -92,6 +107,14 @@ def get_primitive(infile, cart_tol=0.01, angle_tol=5):
                 symprec=cart_tol,
                 angle_tolerance=angle_tol,
                 threshold=0)]
+
+# Get a kpoint grid for a given lattice and spacing
+# (I worked this out using inverse angstrom spacing and 
+#  angstrom lattice, but it should generalize to any units)
+def get_kpoint_grid(lattice, kpoint_spacing):
+	
+	recip_lattice = np.linalg.inv(lattice).T
+	return [int(np.linalg.norm(b)/kpoint_spacing) for b in recip_lattice]
 
 # Set the geometry in the given input file from the given lattice
 # and atoms in the format [[name, x, y, z], [name, x, y, z] ... ]
@@ -316,7 +339,7 @@ def parse_bands(bands_file):
 
 # Plot a bandstructure (optionally specifying a file
 # with the indicies of the high symmetry points)
-def plot_bands(qs, all_ws, ylabel, hsp_file=None):
+def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0):
 
 	# Parse high symmetry points
 	if hsp_file is None:
@@ -381,7 +404,7 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None):
                 for i in range(1, len(dc_pts)):
                         s = dc_pts[i-1]
                         f = dc_pts[i]
-                        plt.plot(range(s,f),band[s:f],color=np.random.rand(3))
+                        plt.plot(range(s,f),band[s:f]-fermi_energy,color=np.random.rand(3))
 
         plt.axhline(0, color="black")
         plt.ylabel(ylabel)
