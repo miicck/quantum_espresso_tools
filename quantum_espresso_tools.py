@@ -5,6 +5,7 @@ import sys
 import os
 
 RY_TO_K = 157887.6633481157
+RY_TO_CMM = 109736.75775046606
 
 # Parse the result of a vc-relax run for the
 # atomic positions and the cell parameters
@@ -128,7 +129,8 @@ def modify_input(in_file,
 	smearing    = None,
 	qpoints     = None,
 	calculation = None,
-	den_cutoff  = None):
+	den_cutoff  = None,
+	recover     = None):
 
         input = open(in_file)
         lines = input.read().split("\n")
@@ -180,6 +182,18 @@ def modify_input(in_file,
 						overwrite.write(kline+"\n")
 				continue
 
+		# Replace number of atoms
+		if atoms != None:
+			if "nat=" in line.replace(" ","").lower():
+				line = "nat="+str(len(atoms))+","
+			if "ntyp" in line.lower():
+				unique_names = []
+				for a in atoms:
+					if a[0] in unique_names:
+						continue
+					unique_names.append(a[0])
+				line = "ntyp="+str(len(unique_names))+","
+
 		# Replace the calculation type
 		if calculation != None:
 			if "calculation" in line.lower():
@@ -213,10 +227,26 @@ def modify_input(in_file,
 		if pressure != None:
 			if "press" in line.lower():
 				line = "press="+str(pressure)+","
+
+		# Replace the recovery option for a phonon calculation
+		if recover != None:
+			if "recover" in line.lower():
+				if recover:
+					line = "recover=.true.,"
+				else:
+					line = "recover=.false.,"
+				# record our success
+				recover = None
 			
 		overwrite.write(line+"\n")
 
 	overwrite.close()
+	
+	# Check for errors
+	if recover != None:
+		ex  = "Did not properly set the recover option! "
+		ex += "Does the line recover=... exist in "+in_file
+		raise Exception(ex)
 
 # Get the path in the B.Z, interpolated to roughly
 # num_points points
@@ -286,7 +316,7 @@ def parse_a2f(a2f_file):
 		if neg_mode: continue
 		a2f_noneg += p
 	
-	return [omega, a2f_full, a2f_noneg, a2f_proj]
+	return [omega*RY_TO_CMM, a2f_full, a2f_noneg, a2f_proj]
 
 # Get superconductivity info from eliashhberg function
 def get_tc_info(omega, a2f, mu):
@@ -337,9 +367,66 @@ def parse_bands(bands_file):
 	
 	return [qs, all_ws]
 
+# Parse partial electronic PDOS from all pdos_atom#... files
+def parse_electron_pdos(direc):
+	files = []
+	for f in os.listdir(direc):
+		if "pdos_atm" not in f: continue
+		files.append(direc+"/"+f)
+
+	pdos = []
+	energies = []
+	labels = []
+	read_energies = False	
+
+	for f in files:
+		atm, wf = f.split("_")[-2:]
+		atm = "Atom "+atm.split("#")[-1]
+		wf = wf.split("#")[-1]
+		labels.append(atm + " " + wf)
+		
+		f = open(f)
+		lines = f.read().split("\n")[1:-1]
+		f.close()
+	
+		data = []
+		for l in lines:
+			data.append(float(l.split()[2]))
+			if not read_energies:
+				energies.append(float(l.split()[0]))
+		pdos.append(data)
+		read_energies = True
+	
+	return energies, pdos, labels
+
+# Parse phonon density of states from phonon.dos file
+def parse_phonon_dos(filename):
+	f = open(filename)
+	lines = f.read().split("\n")[1:-1]
+	f.close()
+	data = []
+	for l in lines:
+		data.append([float(w) for w in l.split()])
+	data = np.array(data).T
+	return data[0], data[2:] # Note: data[1] = sum(data[2:])
+
+# Plot a density of states, (or partial density of states)
+def plot_dos(ws, pdos, labels=None, fermi_energy=0):
+	tot = np.zeros(len(pdos[0]))
+	ws = np.array(ws) - fermi_energy
+	for i, pd in enumerate(pdos):
+		label = None
+		if not labels is None:
+			label = labels[i]
+		plt.fill_betweenx(ws, tot, tot+pd, label=label)
+		tot += pd
+	if not labels is None:
+		plt.legend()
+	plt.axhline(0, color="black")
+
 # Plot a bandstructure (optionally specifying a file
 # with the indicies of the high symmetry points)
-def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0):
+def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_cross=False):
 
 	# Parse high symmetry points
 	if hsp_file is None:
@@ -366,6 +453,7 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0):
         # Attempt to sort out band crossings
         bands = np.array(all_ws)
         for iq in range(1, len(bands) - 1):
+		if not resolve_band_cross: break
 
                 # Extrapolate modes at iq+1 from modes at iq and iq-1
                 extrap = []
@@ -409,9 +497,12 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0):
         plt.axhline(0, color="black")
         plt.ylabel(ylabel)
         plt.xticks(xtick_vals, xtick_names)
+	for x in xtick_vals:
+		plt.axvline(x, color="black", linestyle=":")
+
         for x in dc_pts:
-                plt.axvline(x, color="black", linestyle=":")
-                plt.axvline(x-1, color="black", linestyle=":")
+                plt.axvline(x, color="black")
+                plt.axvline(x-1, color="black")
 
 # Removes the brillouin zone path from a bandstructure input file
 def remove_bz_path(bands_in):
