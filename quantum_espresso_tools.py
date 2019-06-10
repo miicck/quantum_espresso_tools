@@ -20,7 +20,7 @@ def parse_vc_relax(filename):
 
         for i, line in enumerate(lines):
 		
-		# Ignore case, check if BFGS has finished
+		# Ignore case
                 line = line.lower()
 
 		# Parse cell parameters 
@@ -47,6 +47,11 @@ def parse_vc_relax(filename):
 		# Parse final pressure
 		if "p=" in line:
 			data["pressure"] = float(line.split("=")[-1])
+
+		# Parse final volume
+		if "unit-cell volume" in line:
+			data["volume"] = float(line.split("=")[-1].split()[0])
+	
         return data
 
 # Parse an scf.out file for various things
@@ -180,6 +185,7 @@ def modify_input(in_file,
 						kline = " ".join(str(ki) for ki in k)
 						kline += " " + str(weight)
 						overwrite.write(kline+"\n")
+				kpoints = None
 				continue
 
 		# Replace number of atoms
@@ -239,6 +245,21 @@ def modify_input(in_file,
 				recover = None
 			
 		overwrite.write(line+"\n")
+
+	# Add kpoints to bottom of file
+	# if they were not set somewhere else
+	if kpoints != None:
+		if len(kpoints) == 3:
+			overwrite.write("K_POINTS automatic\n")
+			overwrite.write(" ".join([str(k) for k in kpoints])+" 0 0 0\n")
+		else:
+			overwrite.write("K_POINTS (crystal)\n")
+			overwrite.write(str(len(kpoints))+"\n")
+			weight = 1/float(len(kpoints))
+			for k in kpoints:
+				kline = " ".join(str(ki) for ki in k)
+				kline += " " + str(weight)
+				overwrite.write(kline+"\n")
 
 	overwrite.close()
 	
