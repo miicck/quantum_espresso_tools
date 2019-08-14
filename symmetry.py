@@ -1,4 +1,5 @@
 import seekpath
+import numpy as np
 
 # Get the seekpath representation of the primitive geometry
 # for the given input file returns [atom_names, seekpath_geom]

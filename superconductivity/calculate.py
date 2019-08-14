@@ -1,4 +1,5 @@
-import quantum_espresso_tools as qet
+from quantum_espresso_tools.symmetry import get_kpoint_grid
+from quantum_espresso_tools.parser   import parse_vc_relax
 import numpy as np
 import seekpath
 import os
@@ -42,6 +43,7 @@ def read_parameters(filename):
         
         i_ignored = []
         string_args = ["pseudo_dir"]
+        int_args    = ["nodes", "cores_per_node"]
 
         for i, l in enumerate(lines):
                 
@@ -83,10 +85,13 @@ def read_parameters(filename):
                         continue
                                 
                 # Parse key-value pairs from the input file
-                # Assume floats unless told otherwise by string_args
                 val = l.split()[1]
-                if key in string_args: val = str(val)
-                else: val = float(val)
+
+                # Convert type for certain keys
+                if   key in string_args : val = str(val)
+                elif key in int_args    : val = int(val)
+                else                    : val = float(val)
+
                 if key in ret: ret[key] = val
                 else: print("Unkown key when parsing {1}: {0}".format(key, filename))
 
@@ -377,7 +382,7 @@ def run_qe(exe, file_prefix, parameters):
 
         # Setup mpi invokation
         if mpirun == "mpirun":
-                mpirun = "mpirun -np {0} -ppn {1}".format(np, ppn)
+                mpirun = "mpirun -np {0}".format(np)
         elif mpirun == "aprun":
                 mpirun = "aprun -n {0}".format(np)
         else:
@@ -428,7 +433,7 @@ def reduce_to_primitive(parameters):
         parameters["high_symm_points"] = prim_geom["point_coords"]
 
         # Work out kpoint grid from spacing
-        kpoint_grid = qet.get_kpoint_grid(
+        kpoint_grid = get_kpoint_grid(
                 parameters["lattice"], parameters["kpoint_spacing"])
 
         # Work out the qpoint grid so there is at least
@@ -452,7 +457,7 @@ def run(parameters):
         # Caclulate relaxed geometry
         create_relax_in(parameters)
         run_qe("pw.x", "relax", parameters)
-        relax_data = qet.parse_vc_relax("relax.out")
+        relax_data = parse_vc_relax("relax.out")
         parameters["lattice"] = relax_data["lattice"]
         parameters["atoms"]   = relax_data["atoms"]
 
