@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import numpy as np
-import seekpath
 import sys
 import os
 
@@ -69,59 +68,6 @@ def parse_scf_out(filename):
                 if "Fermi energy" in line:
                         data["fermi_energy"] = float(line.split("is")[-1].split("e")[0])
         return data
-
-# Get the seekpath representation of the primitive geometry
-# for the given input file returns [atom_names, seekpath_geom]
-def get_primitive(infile, cart_tol=0.01, angle_tol=5):
-
-        fin = open(infile)
-        lines = fin.read().split("\n")
-        fin.close()
-
-        lattice      = []
-        frac_coords  = []
-        atom_names   = []
-        atom_numbers = []
-        i_ignored    = []
-
-        for i, line in enumerate(lines):
-                if i in i_ignored: continue
-
-                if "cell_parameters" in line.lower():
-                        for j in range(i+1,i+4):
-                                i_ignored.append(j)
-                                lattice.append([float(w) for w in lines[j].split()])
-
-                if "atomic_positions" in line.lower():
-                        if "crystal" not in line.lower():
-                                print("Only (crystal) coordinates supported!")
-                        for j in range(i+1, len(lines)):
-                                try:
-                                        name,x,y,z = lines[j].split()
-                                        frac_coords.append([float(x), float(y), float(z)])
-                                        if name in atom_names:
-                                                atom_numbers.append(atom_names.index(name))
-                                        else:
-                                                atom_names.append(name)
-                                                atom_numbers.append(len(atom_names)-1)
-                                except:
-                                        break
-
-        structure = (lattice, frac_coords, atom_numbers)
-        return  [atom_names, seekpath.get_path(
-                structure,
-                with_time_reversal=True,
-                symprec=cart_tol,
-                angle_tolerance=angle_tol,
-                threshold=0)]
-
-# Get a kpoint grid for a given lattice and spacing
-# (I worked this out using inverse angstrom spacing and 
-#  angstrom lattice, but it should generalize to any units)
-def get_kpoint_grid(lattice, kpoint_spacing):
-        
-        recip_lattice = np.linalg.inv(lattice).T
-        return [int(np.linalg.norm(b)/kpoint_spacing) for b in recip_lattice]
 
 # Set the geometry in the given input file from the given lattice
 # and atoms in the format [[name, x, y, z], [name, x, y, z] ... ]
@@ -270,41 +216,6 @@ def modify_input(in_file,
                 ex += "Does the line recover=... exist in "+in_file
                 raise Exception(ex)
 
-# Get the path in the B.Z, interpolated to roughly
-# num_points points
-def get_bz_path(prim_geom, num_points):
-        interp_path = []
-        names = {}
-
-        pairs = prim_geom["path"]
-        for i, ab in enumerate(pairs):
-                c1 = np.array(prim_geom["point_coords"][ab[0]])
-                c2 = np.array(prim_geom["point_coords"][ab[1]])
-                fs = "{0:10.10} {1:20.20} {2:5.5} {3:10.10} {4:20.20}"
-
-                interp_path.append(c1)
-                names[len(interp_path)-1] = ab[0]
-                max_j = num_points/len(pairs)
-                for j in range(1, max_j):
-                        fj = j/float(max_j)
-                        interp_path.append(c1+fj*(c2-c1))
-
-                # Dont duplicate endpoints
-                if i < len(pairs) - 1:
-                        if ab[1] == pairs[i+1][0]:
-                                continue
-
-                interp_path.append(c2)
-                names[len(interp_path)-1] = ab[1]
-
-        return [names, interp_path]
-
-# Get the pressure in a relax.in file
-def parse_pressure(relax_in):
-        for line in open(relax_in).read().split("\n"):
-                if "press" in line:
-                        return float(line.split("=")[-1].split(",")[0])
-
 # Parse the eliashberg function from a given output file
 def parse_a2f(a2f_file):
         
@@ -339,71 +250,6 @@ def parse_a2f(a2f_file):
                 a2f_noneg += p
         
         return [omega*RY_TO_CMM, a2f_full, a2f_noneg, a2f_proj]
-
-# Model of the superconducting gap vs temperature
-# used to fit for Tc
-def gap_model(t, tc, gmax):
-        t = [min(ti,tc) for ti in t]
-        return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
-
-# Get superconductivity info from eliashhberg function
-def get_tc_info(omega, a2f, mu):
-
-        # Use elk to solve the eliashberg equations
-        # carry out caclulation in temporary directory
-
-        # Create elk input file
-        os.system("mkdir tmp_elk 2>/dev/null")
-        elkin = open("tmp_elk/elk.in", "w")
-        elkin.write("tasks\n260\n\nntemp\n20\n")
-        elkin.write("sppath\n'/rscratch/mjh261/elk-6.2.8/species/'\n")
-        elkin.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
-        elkin.write("avec\n1 0 0\n0 1 0\n0 0 1")
-        elkin.close()
-
-        # Create a2F file
-        a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
-        for w, a in zip(omega, a2f):
-                w *= 0.5 # Convert Ry to Ha
-                if a < 0: a = 0
-                a2fin.write("{0} {1}\n".format(w,a))
-        a2fin.close()
-
-        # Run elk
-        print("Solving eliashberg equations ...")
-        os.system("cd tmp_elk; elk > /dev/null")
-
-        # Read superconducting gap vs temperature from output
-        gapf = open("tmp_elk/ELIASHBERG_GAP_T.OUT")
-        lines = gapf.read().split("\n")
-        gapf.close()
-
-        ts   = []
-        gaps = []
-        for l in lines:
-                vals = [float(w) for w in l.split()]
-                if len(vals) != 3: continue
-                ts.append(vals[0])
-                gaps.append(vals[1])
-
-        # Use Allen-Dynes equation to estimate Tc
-        wa    = [[w, a] for w, a in zip(omega, a2f) if w > 0]
-        lam   = np.trapz([2*a/w for w, a in wa], x=[w for w,a in wa])
-        wav   = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=[w for w,a in wa]))
-        wav  *= RY_TO_K
-        tc_ad = (wav/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
-
-        # Fit to model to extract Tc from gap equations
-        p0 = [tc_ad, max(gaps)] # Initial param guess from A-D
-        par, cov = curve_fit(gap_model, ts, gaps, p0)
-        print("Tc = {0} +/- {1} (Eliashberg) {2} (Allen-Dynes)".format(par[0], cov[0][0]**0.5, tc_ad))
-        if np.isfinite(cov[0][0]): tc = par[0]
-        else: tc = 0
-
-        # Remove temporary directory
-        os.system("rm -r tmp_elk")
-
-        return [tc, lam, wav, tc_ad]
 
 # Parse a .bands file
 def parse_bands(bands_file):
