@@ -82,7 +82,8 @@ def read_parameters(filename):
                                 i_ignored.append(j)
                                 n,x,y,z = lines[j].split()
                                 r = [float(x), float(y), float(z)]
-                                r = np.matmul(linv, r)
+				try: r = np.matmul(linv, r)
+				except AttributeError: r = np.dot(linv, r)
                                 atoms.append([n, r[0], r[1], r[2]])
 
                         ret["atoms"] = atoms
@@ -468,45 +469,46 @@ def reduce_to_primitive(parameters):
         # Return resulting new parameter set
         return parameters
 
-def run(parameters):
+def run(parameters, dry=False):
 
         # Reduce to primitive description
         parameters = reduce_to_primitive(parameters)
         
         # Caclulate relaxed geometry
         create_relax_in(parameters)
-        run_qe("pw.x", "relax", parameters)
-        relax_data = parse_vc_relax("relax.out")
-        parameters["lattice"] = relax_data["lattice"]
-        parameters["atoms"]   = relax_data["atoms"]
+        if not dry:
+		run_qe("pw.x", "relax", parameters)
+		relax_data = parse_vc_relax("relax.out")
+		parameters["lattice"] = relax_data["lattice"]
+		parameters["atoms"]   = relax_data["atoms"]
 
         # Run SCF with the new geometry
         create_scf_in(parameters)
-        run_qe("pw.x", "scf", parameters)
+        if not dry: run_qe("pw.x", "scf", parameters)
 
         # Run elec-phonon calculation
         create_elph_in(parameters)
-        run_qe("ph.x", "elph", parameters)
+        if not dry: run_qe("ph.x", "elph", parameters)
 
         # Convert dynamcial matricies etc to real space
         create_q2r_in(parameters)
-        run_qe("q2r.x", "q2r", parameters)
+        if not dry: run_qe("q2r.x", "q2r", parameters)
 
         # Caclulate the phonon bandstructure
         create_ph_bands_in(parameters)
-        run_qe("matdyn.x", "ph_bands", parameters)
+        if not dry: run_qe("matdyn.x", "ph_bands", parameters)
 
         # Caclulate the phonon density of states
         create_ph_dos_in(parameters)
-        run_qe("matdyn.x", "ph_dos", parameters)
+        if not dry: run_qe("matdyn.x", "ph_dos", parameters)
 
         # Caculate the electronic bandstructure
         create_bands_in(parameters)
-        run_qe("pw.x", "bands", parameters)
+        if not dry: run_qe("pw.x", "bands", parameters)
 
         # Re-order bands and calc band-related things
         create_bands_x_in(parameters)
-        run_qe("bands.x", "bands.x", parameters)
+        if not dry: run_qe("bands.x", "bands.x", parameters)
 
-def calculate(infile):
-    run(read_parameters(infile))
+def calculate(infile, dry=False):
+    run(read_parameters(infile), dry=dry)
