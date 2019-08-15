@@ -1,6 +1,7 @@
 from quantum_espresso_tools.symmetry import get_kpoint_grid
 from quantum_espresso_tools.parser   import parse_vc_relax
 import numpy as np
+import numpy.linalg as la
 import seekpath
 import os
 
@@ -23,8 +24,8 @@ def default_parameters():
         "degauss"        : 0.02,     # Smearing width in Ry
         "mixing_beta"    : 0.7,      # Electronic mixing
         "conv_thr"       : 1e-6,     # Electron energy convergence thresh (Ry)
-        "symm_tol_cart"  : 0.01,     # Symmetry tolerance for frac coords
-        "symm_tol_angle" : 5,        # Symmetry tolerance for angles (degrees)
+        "symm_tol_cart"  : 0.001,    # Symmetry tolerance for frac coords
+        "symm_tol_angle" : 0.5,      # Symmetry tolerance for angles (degrees)
         "elph_nsig"      : 10,       # Number of smearing witdths to use
         "elph_dsig"      : 0.005,    # Spacing of smearing widths (Ry)
         "lattice"        : 2.15*np.identity(3),               # Crystal lattice in angstrom
@@ -65,11 +66,25 @@ def read_parameters(filename):
                 # Parse the atoms from the input file
                 elif key == "atoms":
                         count = int(l.split()[1])
+                        units = l.split()[2]
+
+                        # Calculate transformation to fractional coordinates
+                        if units == "crystal" or units == "fractional":
+                            linv = np.identity(3)
+                        elif units == "angstrom":
+                            linv = la.inv(np.array(ret["lattice"]).T)
+                        else:
+                            raise ValueError("Unkown atom coordinate units: "+units)
+                        
+                        # Parse atoms, transforming as we go
                         atoms = []
                         for j in range(i+1, i+1+count):
                                 i_ignored.append(j)
                                 n,x,y,z = lines[j].split()
-                                atoms.append([n, float(x), float(y), float(z)])
+                                r = [float(x), float(y), float(z)]
+                                r = np.matmul(linv, r)
+                                atoms.append([n, r[0], r[1], r[2]])
+
                         ret["atoms"] = atoms
                         continue
 
@@ -135,6 +150,8 @@ def create_relax_in(parameters):
         t += "pseudo_dir='{0}',\n".format(parameters["pseudo_dir"])
         t += "outdir='.',\n"
         t += "forc_conv_thr={0},\n".format(parameters["forc_conv_thr"])
+        if os.path.isfile("relax.out"):
+            t += "restart_mode='restart',\n"
         t += "/\n"
 
         # System namelist
@@ -174,7 +191,7 @@ def create_relax_in(parameters):
         f.write(t)
         f.close()
 
-def create_scf_non_geom(parameters):
+def create_scf_non_geom(parameters, file_prefix="scf"):
         
         # Control namelist
         t  = "&CONTROL\n"
@@ -183,6 +200,8 @@ def create_scf_non_geom(parameters):
         t += "outdir='.',\n"
         t += "tprnfor=.true.,\n"
         t += "tstress=.true.,\n"
+        if os.path.isfile("{0}.out".format(file_prefix)):
+            t += "restart_mode='restart',\n"
         t += "/\n"
 
         # System namelist
@@ -242,7 +261,7 @@ def create_bands_in(parameters):
         # Create the bands input file the same
         # way as an scf file, then replace the kpoints
         # with the path
-        t  = create_scf_non_geom(parameters)
+        t  = create_scf_non_geom(parameters, file_prefix="bands")
         t += create_qe_input_geom(parameters)
 
         t = t[0:t.find("K_POINTS")]
