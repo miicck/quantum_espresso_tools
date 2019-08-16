@@ -1,4 +1,5 @@
 import os
+from subprocess import check_output
 import numpy as np
 
 # Model of the superconducting gap vs temperature
@@ -12,12 +13,15 @@ def get_tc_info(omega, a2f, mu):
 
         # Use elk to solve the eliashberg equations
         # carry out caclulation in temporary directory
+	elk_base_dir = check_output(["which", "elk"])
+	elk_base_dir = elk_base_dir.decode("utf-8").replace("/src/elk\n", "")
+	species_dir  = elk_base_dir+"/species/"
 
         # Create elk input file
         os.system("mkdir tmp_elk 2>/dev/null")
         elkin = open("tmp_elk/elk.in", "w")
         elkin.write("tasks\n260\n\nntemp\n20\n")
-        elkin.write("sppath\n'/rscratch/mjh261/elk-6.2.8/species/'\n")
+        elkin.write("sppath\n'{0}'\n".format(species_dir))
         elkin.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
         elkin.write("avec\n1 0 0\n0 1 0\n0 0 1")
         elkin.close()
