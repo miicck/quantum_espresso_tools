@@ -82,8 +82,8 @@ def read_parameters(filename):
                                 i_ignored.append(j)
                                 n,x,y,z = lines[j].split()
                                 r = [float(x), float(y), float(z)]
-				try: r = np.matmul(linv, r)
-				except AttributeError: r = np.dot(linv, r)
+                                try: r = np.matmul(linv, r)
+                                except AttributeError: r = np.dot(linv, r)
                                 atoms.append([n, r[0], r[1], r[2]])
 
                         ret["atoms"] = atoms
@@ -412,7 +412,19 @@ def run_qe(exe, file_prefix, parameters):
         nk = min(nodes*2, np)
         qe_flags = "-nk {0}".format(nk)
         cmd = "{0} {1} {2} <{3}.in> {3}.out".format(mpirun, exe, qe_flags, file_prefix) 
+        parameters["out_file"].write("Running: "+cmd+"\n")
         os.system(cmd)
+
+        # Read output file
+        outf = open(file_prefix+".out")
+        out = outf.read()
+        outf.close()
+
+        # Check calculation completed properly
+        if not "JOB DONE" in out:
+            err = "JOB DONE not found in {0}.out".format(file_prefix)
+            parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
+            raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
 
 def reduce_to_primitive(parameters):
         
@@ -473,14 +485,15 @@ def run(parameters, dry=False):
 
         # Reduce to primitive description
         parameters = reduce_to_primitive(parameters)
+        parameters["out_file"] = open("run.out","w",1)
         
         # Caclulate relaxed geometry
         create_relax_in(parameters)
         if not dry:
-		run_qe("pw.x", "relax", parameters)
-		relax_data = parse_vc_relax("relax.out")
-		parameters["lattice"] = relax_data["lattice"]
-		parameters["atoms"]   = relax_data["atoms"]
+                run_qe("pw.x", "relax", parameters)
+                relax_data = parse_vc_relax("relax.out")
+                parameters["lattice"] = relax_data["lattice"]
+                parameters["atoms"]   = relax_data["atoms"]
 
         # Run SCF with the new geometry
         create_scf_in(parameters)
