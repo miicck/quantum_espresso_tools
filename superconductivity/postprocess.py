@@ -24,7 +24,7 @@ def get_tc_info(omega, a2f, mu):
     # Create elk input file
     os.system("mkdir tmp_elk 2>/dev/null")
     elkin = open("tmp_elk/elk.in", "w")
-    elkin.write("tasks\n260\n\nntemp\n20\n")
+    elkin.write("tasks\n260\n\nntemp\n20\nmustar\n{0}\n".format(mu))
     elkin.write("sppath\n'{0}'\n".format(species_dir))
     elkin.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
     elkin.write("avec\n1 0 0\n0 1 0\n0 0 1")
@@ -39,7 +39,7 @@ def get_tc_info(omega, a2f, mu):
     a2fin.close()
 
     # Run elk
-    print("Solving eliashberg equations ...")
+    print("Solving eliashberg equations with mu = {0} ...".format(mu))
     os.system("cd tmp_elk; elk > /dev/null")
 
     # Read superconducting gap vs temperature from output
