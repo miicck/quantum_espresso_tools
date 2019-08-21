@@ -5,7 +5,6 @@ import sys
 import os
 
 RY_TO_K = 157887.6633481157
-RY_TO_CMM = 109736.75775046606
 
 # Parse the result of a vc-relax run for the
 # atomic positions and the cell parameters
@@ -249,7 +248,7 @@ def parse_a2f(a2f_file):
                 if neg_mode: continue
                 a2f_noneg += p
         
-        return [omega*RY_TO_CMM, a2f_full, a2f_noneg, a2f_proj]
+        return [omega, a2f_full, a2f_noneg, a2f_proj]
 
 # Parse a .bands file
 def parse_bands(bands_file):

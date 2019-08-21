@@ -4,6 +4,7 @@ import numpy as np
 import numpy.linalg as la
 import seekpath
 import os
+import subprocess
 
 def default_parameters():
         return {
@@ -407,6 +408,12 @@ def run_qe(exe, file_prefix, parameters):
                 mpirun = "aprun -n {0}".format(np)
         else:
                 raise ValueError("Unkown mpirun = {0}".format(mpirun))
+
+        # Check if the ESPRESSO_BIN environment variable is set
+        if "ESPRESSO_BIN" in os.environ:
+            eb = os.environ["ESPRESSO_BIN"] 
+            parameters["out_file"].write("Using QE from {0}\n".format(eb))
+            exe = eb + "/" + exe
         
         # Invoke the program 
         nk = min(nodes*2, np)
