@@ -65,9 +65,15 @@ def get_tc_info(omega, a2f, mu):
     # Fit to model to extract Tc from gap equations
     p0 = [tc_ad, max(gaps)] # Initial param guess from A-D
     par, cov = curve_fit(gap_model, ts, gaps, p0)
-    print("Tc = {0} +/- {1} (Eliashberg) {2} (Allen-Dynes)".format(par[0], cov[0][0]**0.5, tc_ad))
-    if np.isfinite(cov[0][0]): tc = par[0]
-    else: tc = 0
+
+    if np.isfinite(cov).all(): 
+   	tc  = par[0]
+	err = cov[0][0]**0.5
+    else:
+    	tc  = 0
+	err = np.inf
+
+    print("Tc = {0} +/- {1} (Eliashberg) {2} (Allen-Dynes)".format(tc, err, tc_ad))
 
     # Remove temporary directory
     os.system("rm -r tmp_elk")
