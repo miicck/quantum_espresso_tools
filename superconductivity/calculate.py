@@ -100,6 +100,16 @@ def read_parameters(filename):
                                 species.append([n, float(m), p])
                         ret["species"] = species
                         continue
+
+                # Parse mpirun and arguments
+                elif key == "mpirun":
+                    ret["mpirun"] = " ".join(l.split()[1:])
+                    continue
+
+                # Parse qpoint_grid
+                elif key == "qpoint_grid":
+                    ret["qpoint_grid"] = [int(q) for q in l.split()[1:4]]
+                    continue
                                 
                 # Parse key-value pairs from the input file
                 val = l.split()[1]
@@ -402,10 +412,10 @@ def run_qe(exe, file_prefix, parameters):
         np     = nodes * ppn
 
         # Setup mpi invokation
-        if mpirun == "mpirun":
-                mpirun = "mpirun -np {0}".format(np)
-        elif mpirun == "aprun":
-                mpirun = "aprun -n {0}".format(np)
+        if "mpirun" in mpirun:
+                mpirun = "{0} -np {1}".format(mpirun, np)
+        elif "aprun" in mpirun:
+                mpirun = "{0} -n {1}".format(mpirun, np)
         else:
                 raise ValueError("Unkown mpirun = {0}".format(mpirun))
 
@@ -471,19 +481,32 @@ def reduce_to_primitive(parameters):
         parameters["bz_path"] = prim_geom["path"]
         parameters["high_symm_points"] = prim_geom["point_coords"]
 
+        # Work out k-point grid from q-point grid and
+        # k-points per qpoint
+        if "qpoint_grid" in parameters:
+            
+            if "kpoint_spacing" in parameters:
+                print("Explicit q-point grid specified, ignoring k-point spacing")
+
+            kpq = parameters["kpts_per_qpt"]
+            qpg = parameters["qpoint_grid"]
+            parameters["kpoint_grid"] = [int(q*kpq) for q in qpg]
+
         # Work out kpoint grid from spacing
-        kpoint_grid = get_kpoint_grid(
-                parameters["lattice"], parameters["kpoint_spacing"])
+        elif "kpoint_spacing" in parameters:
 
-        # Work out the qpoint grid so there is at least
-        # 1/kpts_per_qpt qpoints per kpoint
-        kpq = parameters["kpts_per_qpt"]
-        k2q = lambda k : max(int(0.5 + float(k)/float(kpq)), 1)
-        qpoint_grid = [k2q(k) for k in kpoint_grid]
-        parameters["qpoint_grid"] = qpoint_grid
+            kpoint_grid = get_kpoint_grid(
+                    parameters["lattice"], parameters["kpoint_spacing"])
 
-        # Ensure k-point grid is multiple of qpoint grid
-        parameters["kpoint_grid"] = [q*kpq for q in qpoint_grid]
+            # Work out the qpoint grid so there is at least
+            # 1/kpts_per_qpt qpoints per kpoint
+            kpq = parameters["kpts_per_qpt"]
+            k2q = lambda k : max(int(0.5 + float(k)/float(kpq)), 1)
+            qpoint_grid = [k2q(k) for k in kpoint_grid]
+            parameters["qpoint_grid"] = qpoint_grid
+
+            # Ensure k-point grid is multiple of qpoint grid
+            parameters["kpoint_grid"] = [q*kpq for q in qpoint_grid]
 
         # Return resulting new parameter set
         return parameters

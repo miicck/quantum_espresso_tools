@@ -34,7 +34,7 @@ def get_tc_info(omega, a2f, mu):
     a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
     for w, a in zip(omega, a2f):
             w *= 0.5 # Convert Ry to Ha
-            if a < 0: a = 0
+            #if a < 0: a = 0
             a2fin.write("{0} {1}\n".format(w,a))
     a2fin.close()
 
@@ -70,7 +70,7 @@ def get_tc_info(omega, a2f, mu):
     else: tc = 0
 
     # Remove temporary directory
-    os.system("rm -r tmp_elk")
+    #os.system("rm -r tmp_elk")
 
     return [tc, lam, wav, tc_ad]
 
