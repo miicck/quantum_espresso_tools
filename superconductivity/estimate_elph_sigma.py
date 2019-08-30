@@ -35,15 +35,10 @@ for l in lines:
 RY_TO_EV = 13.605698065893753
 
 data = []
-for sigma in np.linspace(0.0001, 0.1, 101):
+for sigma in np.linspace(0.0001, 0.1, 401):
     sigma *= RY_TO_EV
-
-    pts = []
-    for e in evals:
-        pts.append([e, np.exp(-(e-fermi_energy)**2/sigma**2)])
-    pts = np.array(pts).T
-
-    data.append([sigma/RY_TO_EV, np.sum(pts[1])/sigma])
+    to_sum = np.exp(-(np.array(evals)-fermi_energy)**2/sigma**2)
+    data.append([sigma/RY_TO_EV, np.sum(to_sum)/sigma])
 
 data = np.array(data).T
 plt.plot(data[0], data[1], marker="+")

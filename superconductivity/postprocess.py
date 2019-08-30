@@ -21,22 +21,25 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
     elk_base_dir = elk_base_dir.decode("utf-8").replace("/src/elk\n", "")
     species_dir  = elk_base_dir+"/species/"
 
-    # Create elk input file
+    # Create temporary directory to run elk in
     os.system("mkdir tmp_elk 2>/dev/null")
+
+    # Create a2F file
+    a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
+    wa    = [[w, a] for w, a in zip(omega, a2f) if w > 0]
+    for w, a in wa:
+            w *= 0.5 # Convert Ry to Ha
+            a2fin.write("{0} {1}\n".format(w,a))
+    a2fin.close()
+
+    # Create elk input file
     elkin = open("tmp_elk/elk.in", "w")
     elkin.write("tasks\n260\n\nntemp\n20\nmustar\n{0}\n".format(mu))
+    elkin.write("\nwplot\n{0} {1} {2}\n-0.5 0.5\n".format(len(wa), 1, 1))
     elkin.write("sppath\n'{0}'\n".format(species_dir))
     elkin.write("atoms\n1\n'La.in'\n1\n0 0 0 0 0 0\n")
     elkin.write("avec\n1 0 0\n0 1 0\n0 0 1")
     elkin.close()
-
-    # Create a2F file
-    a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
-    for w, a in zip(omega, a2f):
-            w *= 0.5 # Convert Ry to Ha
-            #if a < 0: a = 0
-            a2fin.write("{0} {1}\n".format(w,a))
-    a2fin.close()
 
     # Run elk
     print("Solving eliashberg equations with mu = {0} ...".format(mu))
@@ -56,11 +59,19 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
             gaps.append(vals[1])
 
     # Use Allen-Dynes equation to estimate Tc
-    wa    = [[w, a] for w, a in zip(omega, a2f) if w > 0]
-    lam   = np.trapz([2*a/w for w, a in wa], x=[w for w,a in wa])
-    wav   = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=[w for w,a in wa]))
-    wav  *= RY_TO_K
-    tc_ad = (wav/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
+
+    omegas = [w for w, a in wa]
+    lam    = np.trapz([2*a/w for w, a in wa], x=omegas)
+    wlog   = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=omegas))
+    wrms   = ((2/lam)*np.trapz([a*w for w, a in wa], x=omegas))**0.5
+
+    g1 = 2.46*(1+3.8*mu)
+    g2 = 1.82*(1+6.3*mu)*(wrms/wlog)
+
+    f1 = (1+(lam/g1)**(3.0/2.0))**(1.0/3.0)
+    f2 = 1 + (wrms/wlog - 1) * (lam**2) / (lam**2 + g2**2) 
+
+    tc_ad = RY_TO_K*f1*f2*(wlog/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
     
     # Guess tc from where gaps reach < 5% of maximum
     tc_guess = 0
@@ -94,12 +105,29 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
         tc  = tc_guess
         err = 0
 
-    print("Tc = {0} +/- {1} (Eliashberg) {2} (Allen-Dynes)".format(tc, err, tc_ad))
+    # See what elk thinks the allen-dynes parameters are
+    with open("tmp_elk/ELIASHBERG.OUT") as f:
+        for l in f.read().split("\n"):
+            if "Mcmillan Tc"     in l: elk_ad   = float(l.split(":")[-1])
+            if "Mcmillan lambda" in l: elk_lam  = float(l.split(":")[-1])
+            if "Mcmillan wlog"   in l: elk_wlog = float(l.split(":")[-1])
+            if "Mcmillan wrms"   in l: elk_wrms = float(l.split(":")[-1])
+
+    print("Tc = {0} +/- {1} (Eliashberg)".format(tc, err))
+    print("Mcmillan params")
+    print("           Me        Elk")
+    print(" Tc        {0:8.8} {1:8.8}  (ratio = {2})".format(tc_ad, elk_ad, tc_ad/elk_ad))
+    print(" Lambda    {0:8.8} {1:8.8}  (ratio = {2})".format(lam,   elk_lam, lam/elk_lam))
+    print(" Wlog      {0:8.8} {1:8.8}  (ratio = {2})".format(wlog,  elk_wlog, wlog/elk_wlog))
+    print(" Wrms      {0:8.8} {1:8.8}  (ratio = {2})".format(wrms,  elk_wrms, wrms/elk_wrms))
+    print(" Wlog/Wrms {0:8.8} {1:8.8}  (ratio = {2})".format(wlog/wrms, elk_wlog/elk_wrms,
+         (wlog/wrms)/(elk_wlog/elk_wrms) ))
+    print("\n")
 
     # Remove temporary directory
     #os.system("rm -r tmp_elk")
 
-    return [tc, lam, wav, tc_ad]
+    return [tc, lam, wlog, tc_ad]
 
 # List all files in the given folder
 def listfiles(folder):
@@ -135,14 +163,14 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
         print("Getting T_c for "+f)
         w = open(ftc,"w")
 
-        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.1, plot_fit=plot_fits)
+        tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.1, plot_fit=plot_fits)
         w.write("mu = 0.1\n")
         fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
-        w.write(fs.format(tc,tc_ad,lam,wav))
+        w.write(fs.format(tc,tc_ad,lam,wlog))
 
-        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.15, plot_fit=plot_fits)
+        tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.15, plot_fit=plot_fits)
         w.write("mu = 0.15\n")
         fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
-        w.write(fs.format(tc,tc_ad,lam,wav))
+        w.write(fs.format(tc,tc_ad,lam,wlog))
 
         w.close()
