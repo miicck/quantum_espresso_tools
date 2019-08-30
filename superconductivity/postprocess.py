@@ -13,7 +13,7 @@ def gap_model(t, tc, gmax):
     return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
 
 # Get superconductivity info from eliashhberg function
-def get_tc_info(omega, a2f, mu):
+def get_tc_info(omega, a2f, mu, plot_fit=False):
 
     # Use elk to solve the eliashberg equations
     # carry out caclulation in temporary directory
@@ -61,17 +61,38 @@ def get_tc_info(omega, a2f, mu):
     wav   = np.exp((2/lam)*np.trapz([np.log(w)*a/w for w, a in wa], x=[w for w,a in wa]))
     wav  *= RY_TO_K
     tc_ad = (wav/1.20)*np.exp(-1.04*(1+lam)/(lam-mu-0.62*lam*mu))
+    
+    # Guess tc from where gaps reach < 5% of maximum
+    tc_guess = 0
+    dtc_guess = np.inf
+    for i, (t, g) in enumerate(zip(ts, gaps)):
+        if g < max(gaps)*0.05:
+            tc_guess = t
+            if i > 0:
+                # Move slightly to the left as we could
+                # have hit zero gap earlier (also helps
+                # the curve fit to not get stuck)
+                tc_guess = ts[i]*0.8 + ts[i-1]*0.2
+            break
 
     # Fit to model to extract Tc from gap equations
-    p0 = [tc_ad, max(gaps)] # Initial param guess from A-D
+    p0 = [tc_guess, max(gaps)] # Initial param guess from A-D
     par, cov = curve_fit(gap_model, ts, gaps, p0)
 
+    if plot_fit:
+        import matplotlib.pyplot as plt
+        plt.plot(ts, gaps, label="Gap", marker="+")
+        plt.plot(ts, gap_model(ts,*par), label="Fit $T_C={0}$".format(par[0]), linestyle=":", marker="+")
+        plt.axvline(tc_guess, label="Guess", color="black", alpha=0.5)
+        plt.legend()
+        plt.show()
+
     if np.isfinite(cov).all(): 
-   	tc  = par[0]
-	err = cov[0][0]**0.5
+        tc  = par[0]
+        err = cov[0][0]**0.5
     else:
-    	tc  = 0
-	err = np.inf
+        tc  = tc_guess
+        err = 0
 
     print("Tc = {0} +/- {1} (Eliashberg) {2} (Allen-Dynes)".format(tc, err, tc_ad))
 
@@ -90,12 +111,13 @@ def listfiles(folder):
 # or its subdirectories and create a
 # matching a2f.dos*.tc file containing tc
 # info
-def process_all_a2f(base_dir, overwrite=False):
+def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
 
     for f in listfiles(base_dir):
 
         if not "a2f.dos" in f.lower(): continue
         if f.endswith(".tc"): continue
+        print("\n")
 
         ftc = f+".tc"
         if os.path.isfile(ftc) and (not overwrite):
@@ -113,12 +135,12 @@ def process_all_a2f(base_dir, overwrite=False):
         print("Getting T_c for "+f)
         w = open(ftc,"w")
 
-        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.1)
+        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.1, plot_fit=plot_fits)
         w.write("mu = 0.1\n")
         fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
         w.write(fs.format(tc,tc_ad,lam,wav))
 
-        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.15)
+        tc, lam, wav, tc_ad = get_tc_info(omega, a2f, 0.15, plot_fit=plot_fits)
         w.write("mu = 0.15\n")
         fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
         w.write(fs.format(tc,tc_ad,lam,wav))

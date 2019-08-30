@@ -218,19 +218,31 @@ def parse_a2f(a2f_file):
         
         data = []
         for line in open(a2f_file).read().split("\n"):
+
+                # Deal with the line that has lambda in it
                 if "lambda" in line:
                         lam = line.split("lambda")[-1]
                         lam = float(lam.split("=")[1].split()[0])
-                if "." not in line: continue
-                try:
-                        dat = [float(n) for n in line.split()]
-                except:
                         continue
-                if len(dat) == 0: continue
-                data.append(dat)
 
-        data = np.array(data).T
+                # Check the line is numerical
+                if "." not in line: continue
 
+                try:
+                        # Sometimes q.e forgets to write the E for
+                        # large -ve exponents
+                        words = line.split()
+                        for i in range(0, len(words)):
+                            if not "-" in words[i][1:]: continue
+                            if "E" in words[i]: continue
+                            words[i] = "E".join(words[i].split("-"))
+                        dat = [float(w) for w in words]
+                        data.append(dat)
+                except:
+                        print("could not parse a2F line: "+line)
+                        continue
+
+        data      = np.array(data).T
         omega     = data[0]
         a2f_full  = data[1]
         a2f_proj  = data[2:]
