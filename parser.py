@@ -230,12 +230,14 @@ def parse_a2f(a2f_file):
 
                 try:
                         # Sometimes q.e forgets to write the E for
-                        # large -ve exponents
+                        # large exponents
                         words = line.split()
                         for i in range(0, len(words)):
-                            if not "-" in words[i][1:]: continue
                             if "E" in words[i]: continue
-                            words[i] = "E".join(words[i].split("-"))
+                            if "-" in words[i][1:]:
+                                words[i] = "E".join(words[i].split("-"))
+                            if "+" in words[i][1:]:
+                                words[i] = "E".join(words[i].split("+"))
                         dat = [float(w) for w in words]
                         data.append(dat)
                 except:

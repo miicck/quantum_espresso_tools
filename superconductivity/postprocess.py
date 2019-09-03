@@ -13,6 +13,7 @@ def gap_model(t, tc, gmax):
     return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
 
 # Get superconductivity info from eliashhberg function
+# we ignore the portion of a2f where w < 0 (if there is such a region)
 def get_tc_info(omega, a2f, mu, plot_fit=False):
 
     # Use elk to solve the eliashberg equations
@@ -28,8 +29,8 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
     a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
     wa    = [[w, a] for w, a in zip(omega, a2f) if w > 0]
     for w, a in wa:
-            w *= 0.5 # Convert Ry to Ha
-            a2fin.write("{0} {1}\n".format(w,a))
+        w *= 0.5 # Convert Ry to Ha
+        a2fin.write("{0} {1}\n".format(w,a))
     a2fin.close()
 
     # Create elk input file
@@ -53,10 +54,10 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
     ts   = []
     gaps = []
     for l in lines:
-            vals = [float(w) for w in l.split()]
-            if len(vals) != 3: continue
-            ts.append(vals[0])
-            gaps.append(vals[1])
+        vals = [float(w) for w in l.split()]
+        if len(vals) != 3: continue
+        ts.append(vals[0])
+        gaps.append(vals[1])
 
     # Use Allen-Dynes equation to estimate Tc
 
@@ -88,7 +89,11 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
 
     # Fit to model to extract Tc from gap equations
     p0 = [tc_guess, max(gaps)] # Initial param guess from A-D
-    par, cov = curve_fit(gap_model, ts, gaps, p0)
+    try:
+        par, cov = curve_fit(gap_model, ts, gaps, p0)
+    except:
+        par = [0]
+        cov = np.inf
 
     if plot_fit:
         import matplotlib.pyplot as plt
@@ -139,7 +144,7 @@ def listfiles(folder):
 # or its subdirectories and create a
 # matching a2f.dos*.tc file containing tc
 # info
-def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
+def process_all_a2f(base_dir, overwrite=False, plot_fits=False, ignore_imaginary=False):
 
     for f in listfiles(base_dir):
 
@@ -157,8 +162,11 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
         print("Parsing a2F for "+f)
         omega, a2f, a2fnn, a2fp = parser.parse_a2f(f)
         if min(omega) < 0:
-            print("Could not get tc for {0}, imaginary modes detected.".format(f))
-            continue
+            if ignore_imaginary:
+                print("Imaginary modes in {0}, ignoring them.".format(f))
+            else:
+                print("Could not get tc for {0}, imaginary modes detected.".format(f))
+                continue
 
         print("Getting T_c for "+f)
         w = open(ftc,"w")

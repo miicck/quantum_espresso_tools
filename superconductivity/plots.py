@@ -63,7 +63,7 @@ def plot_tc_vs_smearing_single(direc, show=True):
     p = plt.plot(data1[0], (data1[1] + data2[1])/2, marker="+", linestyle=":")
     plt.fill_between(data1[0], data1[1], data2[1], alpha=0.15, color=p[0].get_color(), label=direc)
     plt.xlabel(xlabel)
-    plt.xlim([0, 10*sig_incr])
+    plt.xlim([0, max(data1[0])])
     plt.ylabel("Tc (K) - Eliashberg \n $\mu^* \in [{0},{1}]$".format(*mus))
     plt.legend()
 
@@ -71,7 +71,7 @@ def plot_tc_vs_smearing_single(direc, show=True):
     p = plt.plot(data1[0], (data1[2] + data2[2])/2, marker="+", linestyle=":")
     plt.fill_between(data1[0], data1[2], data2[2], alpha=0.15, color=p[0].get_color(), label=direc)
     plt.xlabel(xlabel)
-    plt.xlim([0, 10*sig_incr])
+    plt.xlim([0, max(data1[0])])
     plt.ylabel("Tc (K) - Mcmillan-Allen-Dynes \n $\mu^* \in [{0},{1}]$".format(*mus))
     plt.legend()
 
@@ -146,7 +146,6 @@ def plot_a2f_vs_smearing_single(direc, show=True):
         omega, a2f, a2fnn, a2fp = parse_a2f(direc+"/"+f)
         if min(omega) < 0:
             print("a2f.dos{0} is dynamically unstable".format(n))
-            continue
 
         b = float(n)/10
         color = [b,1-b,0]
