@@ -22,7 +22,7 @@ def default_parameters():
     "ph_ndos"        : 1000,     # Number of points at which to calculate phonon DOS
     "elec_band_kpts" : 100,      # Points along the bandstructure
     "pseudo_dir"     : "./",     # Pseudopotential directory
-    "forc_conv_thr"  : 1e-3,     # Force convergence threshold
+    "forc_conv_thr"  : 1e-5,     # Force convergence threshold
     "degauss"        : 0.02,     # Smearing width in Ry
     "mixing_beta"    : 0.7,      # Electronic mixing
     "conv_thr"       : 1e-6,     # Electron energy convergence thresh (Ry)

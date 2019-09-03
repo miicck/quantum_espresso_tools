@@ -4,6 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from quantum_espresso_tools.parser import parse_vc_relax, parse_a2f
 
+def convert_common_labels(label):
+    if "c2m" in label: return "$C_2m$"
+    if "fm3m" in label: return r"$Fm\bar{3}m$"
+    if "p63mmc" in label: return "$P6_3/mmc$"
+    return label
+
 def plot_tc_vs_smearing(directories):
     
     for d in directories:
@@ -77,44 +83,72 @@ def plot_tc_vs_smearing_single(direc, show=True):
 
     if show: plt.show()
 
-def plot_tc_vs_p(direc, show=True):
+def plot_tc_vs_p(direc, show=True, plot_unstable=False):
+
+    # Use LaTeX
     plt.rc("text", usetex=True)
 
+    # Collect data for different pressures in this directory
     data = []
     for pdir in os.listdir(direc):
 
-        a2f_file = direc+"/"+pdir+"/a2F.dos1.tc"
-        if not os.path.isfile(a2f_file):
-            print(a2f_file+" does not exist, skipping...")
-            continue
-
-        with open(a2f_file) as f:
-            lines = f.read().split("\n")
-        tc, tcad, tc2, tcad2 = [float(l.split("#")[0]) for l in [lines[1], lines[2], lines[6], lines[7]]]
-
+        # Get the pressure from the relax.out file
         relax_file = direc+"/"+pdir+"/relax.out"
         if not os.path.isfile(relax_file):
             print(relax_file+" does not exist, skipping...")
             continue
 
         relax = parse_vc_relax(relax_file)
-        data.append([relax["pressure"], tc, tc2, tcad, tcad2])
+        pressure = relax["pressure"]
 
+        # Check if the a2F.tc file exists
+        a2f_file = direc+"/"+pdir+"/a2F.dos10.tc"
+        if not os.path.isfile(a2f_file):
+            print(a2f_file+" does not exist, skipping...")
+            continue
+
+        # Read the a2F.tc file
+        with open(a2f_file) as f:
+            lines = f.read().split("\n")
+
+        # Check if the structure is unstable
+        unstable = lines[10].split("#")[0].strip() == "True"
+        if unstable and (not plot_unstable): 
+            continue
+
+        # Read in mus and corresponding tcs
+        mu1, mu2 = [float(l.split("=")[-1]) for l in [lines[0], lines[5]]]
+        tc, tcad, tc2, tcad2 = [float(l.split("#")[0]) for l in [lines[1], lines[2], lines[6], lines[7]]]
+
+        # Record the data
+        data.append([pressure, tc, tc2, tcad, tcad2])
+
+    if len(data) == 0:
+        print("No data for "+direc+" skipping...")
+        return
+
+    # Transppose data into arrays for pressure, tc, tc2 ...
     data.sort()
     data = np.array(data).T
-    data[0] /= 10
+    data[0] /= 10 # Convert pressure from Kbar to GPa
 
-    p = plt.plot(data[0], 0.5*(data[1]+data[2]))
-    plt.fill_between(data[0], data[1], data[2], alpha=0.2,
-                     color=p[0].get_color(), label="Eliashberg $\mu^* \in [0.1, 0.15]$")
+    # Format label as math
+    label = convert_common_labels(direc)
 
-    p = plt.plot(data[0], 0.5*(data[3]+data[4]))
-    plt.fill_between(data[0], data[3], data[4], alpha=0.2,
-                     color=p[0].get_color(), label="Allen-Dynes $\mu^* \in [0.1, 0.15]$")
-
+    # Plot Eliashberg Tc
+    plt.subplot(211)
+    plt.fill_between(data[0], data[1], data[2], alpha=0.5, label=label)
     plt.legend()
     plt.xlabel("Pressure (GPa)")
-    plt.ylabel("$T_C$ (K)")
+    plt.ylabel("$T_C$ (K)\nEliashberg, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
+    plt.subplot(212)
+
+    # Plot Allen-Dynes Tc
+    plt.fill_between(data[0], data[3], data[4], alpha=0.5, label=label)
+    plt.legend()
+    plt.xlabel("Pressure (GPa)")
+    plt.ylabel("$T_C$ (K)\nAllen-Dynes, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
+
     if show: plt.show()
 
 def plot_a2f_vs_smearing(direcs):

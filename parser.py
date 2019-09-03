@@ -2,7 +2,8 @@ import numpy as np
 import sys
 import os
 
-RY_TO_K = 157887.6633481157
+RY_TO_K   = 157887.6633481157
+RY_TO_CMM = 109736.75775046606
 
 # Parse the result of a vc-relax run for the
 # atomic positions and the cell parameters
@@ -343,7 +344,7 @@ def parse_phonon_dos(filename):
         for l in lines:
                 data.append([float(w) for w in l.split()])
         data = np.array(data).T
-        return data[0], data[2:] # Note: data[1] = sum(data[2:])
+        return data[0]/RY_TO_CMM, data[2:] # Note: data[1] = sum(data[2:])
 
 # Removes the brillouin zone path from a bandstructure input file
 def remove_bz_path(bands_in):

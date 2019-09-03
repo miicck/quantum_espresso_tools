@@ -3,13 +3,15 @@ from subprocess import check_output
 from quantum_espresso_tools import parser
 from scipy.optimize import curve_fit
 import numpy as np
+import warnings
+warnings.filterwarnings("error")
 
 RY_TO_K = 157887.6633481157
 
 # Model of the superconducting gap vs temperature
 # used to fit for Tc
 def gap_model(t, tc, gmax):
-    t = [min(ti,tc) for ti in t]
+    t = np.array([min(ti, tc) for ti in t])
     return gmax * np.tanh(1.74*np.sqrt(tc/t - 1))
 
 # Get superconductivity info from eliashhberg function
@@ -57,7 +59,7 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
         vals = [float(w) for w in l.split()]
         if len(vals) != 3: continue
         ts.append(vals[0])
-        gaps.append(vals[1])
+        gaps.append(vals[1]/vals[2])
 
     # Use Allen-Dynes equation to estimate Tc
 
@@ -88,10 +90,30 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
             break
 
     # Fit to model to extract Tc from gap equations
+    if tc_guess < 1.0: tc_guess = tc_ad
     p0 = [tc_guess, max(gaps)] # Initial param guess from A-D
     try:
         par, cov = curve_fit(gap_model, ts, gaps, p0)
-    except:
+
+    except Warning as warn:
+        print("Fit failed with waring:")
+        print(warn)
+
+        import matplotlib.pyplot as plt
+        plt.plot(ts, gaps)
+        plt.show()
+
+        par = [0]
+        cov = np.inf
+
+    except RuntimeError as err:
+        print("Fit failed with errror:")
+        print(err)
+
+        import matplotlib.pyplot as plt
+        plt.plot(ts, gaps)
+        plt.show()
+
         par = [0]
         cov = np.inf
 
@@ -104,29 +126,21 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
         plt.show()
 
     if np.isfinite(cov).all(): 
+        print("Finite error")
         tc  = par[0]
         err = cov[0][0]**0.5
     else:
+        print("infinite error")
         tc  = tc_guess
-        err = 0
-
-    # See what elk thinks the allen-dynes parameters are
-    with open("tmp_elk/ELIASHBERG.OUT") as f:
-        for l in f.read().split("\n"):
-            if "Mcmillan Tc"     in l: elk_ad   = float(l.split(":")[-1])
-            if "Mcmillan lambda" in l: elk_lam  = float(l.split(":")[-1])
-            if "Mcmillan wlog"   in l: elk_wlog = float(l.split(":")[-1])
-            if "Mcmillan wrms"   in l: elk_wrms = float(l.split(":")[-1])
+        err = np.inf
 
     print("Tc = {0} +/- {1} (Eliashberg)".format(tc, err))
     print("Mcmillan params")
-    print("           Me        Elk")
-    print(" Tc        {0:8.8} {1:8.8}  (ratio = {2})".format(tc_ad, elk_ad, tc_ad/elk_ad))
-    print(" Lambda    {0:8.8} {1:8.8}  (ratio = {2})".format(lam,   elk_lam, lam/elk_lam))
-    print(" Wlog      {0:8.8} {1:8.8}  (ratio = {2})".format(wlog,  elk_wlog, wlog/elk_wlog))
-    print(" Wrms      {0:8.8} {1:8.8}  (ratio = {2})".format(wrms,  elk_wrms, wrms/elk_wrms))
-    print(" Wlog/Wrms {0:8.8} {1:8.8}  (ratio = {2})".format(wlog/wrms, elk_wlog/elk_wrms,
-         (wlog/wrms)/(elk_wlog/elk_wrms) ))
+    print(" Tc        {0}".format(tc_ad))
+    print(" Lambda    {0}".format(lam))
+    print(" Wlog      {0}".format(wlog))
+    print(" Wrms      {0}".format(wrms))
+    print(" Wlog/Wrms {0}".format(wlog/wrms))
     print("\n")
 
     # Remove temporary directory
@@ -144,7 +158,7 @@ def listfiles(folder):
 # or its subdirectories and create a
 # matching a2f.dos*.tc file containing tc
 # info
-def process_all_a2f(base_dir, overwrite=False, plot_fits=False, ignore_imaginary=False):
+def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
 
     for f in listfiles(base_dir):
 
@@ -161,12 +175,13 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False, ignore_imaginary
 
         print("Parsing a2F for "+f)
         omega, a2f, a2fnn, a2fp = parser.parse_a2f(f)
-        if min(omega) < 0:
-            if ignore_imaginary:
-                print("Imaginary modes in {0}, ignoring them.".format(f))
-            else:
-                print("Could not get tc for {0}, imaginary modes detected.".format(f))
-                continue
+        dynamically_unstable = False
+        for w, a in zip(omega, a2f):
+            if w > -10e-10: continue
+            if a <  10e-10: continue
+            dynamically_unstable = True
+            print("Dynamically unstable")
+            break
 
         print("Getting T_c for "+f)
         w = open(ftc,"w")
@@ -180,5 +195,7 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False, ignore_imaginary
         w.write("mu = 0.15\n")
         fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
         w.write(fs.format(tc,tc_ad,lam,wlog))
+        fs = "{0} # Dynamically unstable? If true, we have ignored imaginary modes to obtain Tc\n"
+        w.write(fs.format(dynamically_unstable))
 
         w.close()
