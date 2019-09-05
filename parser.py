@@ -218,7 +218,8 @@ def modify_input(in_file,
 def parse_a2f(a2f_file):
         
         data = []
-        for line in open(a2f_file).read().split("\n"):
+        with open(a2f_file) as lines:
+            for line in lines:
 
                 # Deal with the line that has lambda in it
                 if "lambda" in line:

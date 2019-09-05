@@ -420,10 +420,12 @@ def run_qe(exe, file_prefix, parameters, dry=False):
 
     # Dont rerun if already done
     if os.path.isfile(file_prefix+".out"):
-        f = open(file_prefix+".out")
-        s = f.read()
-        f.close()
-        if "JOB DONE" in s: return
+        with open(file_prefix+".out") as f:
+            s = f.read()
+            if "JOB DONE" in s:
+                fs = "{0}.out already complete, skipping.\n"
+                parameters["out_file"].write(fs.format(file_prefix))
+                return
 
     # Run quantum espresso with specified parallelism
     mpirun = parameters["mpirun"]
@@ -452,16 +454,12 @@ def run_qe(exe, file_prefix, parameters, dry=False):
     parameters["out_file"].write("Running: "+cmd+"\n")
     os.system(cmd)
 
-    # Read output file
-    outf = open(file_prefix+".out")
-    out = outf.read()
-    outf.close()
-
     # Check calculation completed properly
-    if not "JOB DONE" in out:
-        err = "JOB DONE not found in {0}.out".format(file_prefix)
-        parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
-        raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
+    with open(file_prefix+".out") as f:
+        if not "JOB DONE" in f.read():
+            err = "JOB DONE not found in {0}.out".format(file_prefix)
+            parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
+            raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
 
 def reduce_to_primitive(parameters):
         
@@ -591,13 +589,13 @@ def calculate(infile, dry=False):
     
     # Run auxilliary k-point grid
     # (do this first because it's faster)
-    os.system("mkdir "     + aux_dir + " 2>/dev/null")
-    os.system("cp run.in " + aux_dir)
+    os.system("mkdir " + aux_dir + " 2>/dev/null")
+    os.system("cp "    + infile  + " " + aux_dir)
     os.chdir(aux_dir)
     run(read_parameters(infile), dry=dry, aux_kpts=True)
 
     # Run normal k-point grid
-    os.system("mkdir "     + primary_dir + " 2>/dev/null")
-    os.system("cp run.in " + primary_dir)
+    os.system("mkdir " + primary_dir  + " 2>/dev/null")
+    os.system("cp "    + infile + " " + primary_dir)
     os.chdir(primary_dir)
     run(read_parameters(infile), dry=dry)

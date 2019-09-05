@@ -136,12 +136,11 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
 
     print("Tc = {0} +/- {1} (Eliashberg)".format(tc, err))
     print("Mcmillan params")
-    print(" Tc        {0}".format(tc_ad))
-    print(" Lambda    {0}".format(lam))
-    print(" Wlog      {0}".format(wlog))
-    print(" Wrms      {0}".format(wrms))
-    print(" Wlog/Wrms {0}".format(wlog/wrms))
-    print("\n")
+    print("    Tc        {0} K".format(tc_ad))
+    print("    Lambda    {0}".format(lam))
+    print("    Wlog      {0} Ry".format(wlog))
+    print("    Wrms      {0} Ry".format(wrms))
+    print("    Wlog/Wrms {0}".format(wlog/wrms))
 
     # Remove temporary directory
     #os.system("rm -r tmp_elk")
