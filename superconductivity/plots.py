@@ -95,8 +95,12 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
         # Get the pressure from the relax.out file
         relax_file = direc+"/"+pdir+"/relax.out"
         if not os.path.isfile(relax_file):
-            print(relax_file+" does not exist, skipping...")
-            continue
+            print(relax_file+" does not exist, trying subdirs...")
+            pdir += "/primary_kpts/"
+            relax_file = direc+"/"+pdir+"/relax.out"
+            if not os.path.isfile(relax_file):
+                print(relax_file+" does not exist, skipping...")
+                continue
 
         relax = parse_vc_relax(relax_file)
         pressure = relax["pressure"]
