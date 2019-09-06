@@ -126,11 +126,10 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
         plt.show()
 
     if np.isfinite(cov).all(): 
-        print("Finite error")
         tc  = par[0]
         err = cov[0][0]**0.5
     else:
-        print("infinite error")
+        print("Covariance is infinite!")
         tc  = tc_guess
         err = np.inf
 

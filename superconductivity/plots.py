@@ -83,7 +83,194 @@ def plot_tc_vs_smearing_single(direc, show=True):
 
     if show: plt.show()
 
+def plot_tc_vs_p_aux_primary(
+    sys_direc, 
+    show=True, 
+    plot_unstable=False, 
+    plot_double_delta_info=False):
+    
+    # Plot Tc vs pressure for all of the pressure directories in
+    # sys_direc, using primary and auxillary k-point grids to
+    # estimate the correct double-delta smearing
+
+    if not os.path.isdir(sys_direc):
+        print("{0} is not a directory, skipping...".format(sys_direc))
+        return
+
+    sys_data = []
+
+    # Loop over pressure directories
+    for pdir in os.listdir(sys_direc):
+        pdir = sys_direc + "/" + pdir
+        if not os.path.isdir(pdir): continue
+
+        grids_data = []
+
+        # Look over k-point grid directories
+        for grid_dir in os.listdir(pdir):
+            grid_dir = pdir + "/" + grid_dir
+            if not os.path.isdir(grid_dir): continue
+
+            relax   = None
+            tc_data = []
+
+            # Loop over files
+            for filename in os.listdir(grid_dir):
+                filename = grid_dir + "/" + filename
+
+                if filename.endswith(".tc"):
+
+                    # Parse tc information
+                    isig = int(filename.split(".dos")[-1].split(".")[0])
+                    with open(filename) as f:
+                        lines = f.read().split("\n")
+                        tc1 = float(lines[1].split("#")[0])
+                        tc2 = float(lines[6].split("#")[0])
+
+                    tc_data.append([isig, tc1, tc2])
+
+                elif filename.endswith("relax.out"):
+                    
+                    # Parse vc-relax output
+                    relax = parse_vc_relax(filename)
+
+            if relax is None:
+                print("Could not parse relaxation data in "+grid_dir)
+                continue
+
+            if len(tc_data) == 0:
+                print("No Tc information found in "+grid_dir)
+                continue
+
+            tc_data.sort()
+            sigma, tc1, tc2 = np.array(tc_data).T
+
+            if plot_double_delta_info:
+                label = "Kpoint grid {0}".format(len(grids_data)+1)
+
+                plt.subplot(221)
+                plt.plot(sigma, tc1, label=label)
+                plt.xlabel("$\sigma (Ry)$")
+                plt.ylabel("$T_C (K)$, Eliashberg\n$\mu^* = 0.1$")
+
+                plt.subplot(222)
+                plt.plot(sigma, tc2, label=label)
+                plt.xlabel("$\sigma (Ry)$")
+                plt.ylabel("$T_C (K)$, Eliashberg\n$\mu^* = 0.15$")
+
+            grids_data.append({
+                "relax"    : relax,
+                "sigma"    : sigma,
+                "tc1"      : tc1,
+                "tc2"      : tc2,
+                "pressure" : relax["pressure"]
+            })
+
+        if len(grids_data) < 2:
+            print("Less than 2 k-point grids found in "+pdir+", skipping...")
+            continue
+
+        # Evaluate the difference in Tc(sigma) between
+        # the two grids and use this to work out what the
+        # best smearing value is
+        sigma = grids_data[0]["sigma"]
+        dtc1  = list(abs(grids_data[0]["tc1"] - grids_data[1]["tc1"]))
+        dtc2  = list(abs(grids_data[0]["tc2"] - grids_data[1]["tc2"]))
+
+        jmin1 = max([j for j in range(0, len(dtc1)) if dtc1[j] > dtc1[-1]])
+        jmin2 = max([j for j in range(0, len(dtc2)) if dtc2[j] > dtc2[-1]])
+
+        jbest1 = dtc1.index(min([dt for dt in dtc1[jmin1:]])) 
+        jbest2 = dtc2.index(min([dt for dt in dtc2[jmin2:]])) 
+
+        tbest01 = grids_data[0]["tc1"][jbest1]
+        tbest11 = grids_data[1]["tc1"][jbest1]
+        tbest02 = grids_data[0]["tc2"][jbest2]
+        tbest12 = grids_data[1]["tc2"][jbest2]
+
+        tcmin1 = min(tbest01, tbest11)
+        tcmax1 = max(tbest01, tbest11)
+        tcmin2 = min(tbest02, tbest12)
+        tcmax2 = max(tbest02, tbest12)
+
+        tcmax = max(tcmax1, tcmax2)
+        tcmin = min(tcmin1, tcmin2)
+        tcav  = 0.5*(tcmax+tcmin)
+        pressure  = np.mean([gd["pressure"] for gd in grids_data])
+        dpressure = np.std([gd["pressure"] for gd in grids_data])
+        sys_data.append([pressure, tcmin, tcmax])
+
+        if plot_double_delta_info:
+            plt.suptitle(r"$T_C = {0:8.2f} \pm {1:8.2f}$".format(tcav, (tcmax-tcmin)/2.0))
+
+            plt.subplot(223)
+            plt.plot(sigma, dtc1)
+            plt.xlabel("$\sigma (Ry)$")
+            plt.ylabel("$\Delta T_C (K)$, Eliashberg\n$\mu^* = 0.1$")
+            plt.axvline(sigma[jmin1],  color="black", linestyle=":", label="Min considered $\sigma$")
+            plt.axvline(sigma[jbest1], color="green", label="Best $\sigma$")
+            plt.legend()
+
+            plt.subplot(221)
+            plt.axvline(sigma[jbest1], color="green", label="Best $\sigma$")
+            label = "Best $T_C \in [{0:8.2f}, {1:8.2f}]$"
+            label = label.format(tcmin1, tcmax1)
+            plt.axhspan(tcmin1, tcmax1, color="green", alpha=0.5, label=label)
+            plt.legend()
+
+            plt.subplot(224)
+            plt.plot(sigma, dtc2)
+            plt.xlabel("$\sigma (Ry)$")
+            plt.ylabel("$\Delta T_C (K)$, Eliashberg\n$\mu^* = 0.15$")
+            plt.axvline(sigma[jmin2], color="black", linestyle=":", label="Min considered $\sigma$")
+            plt.axvline(sigma[jbest2], color="green", label="Best $\sigma$")
+            plt.legend()
+
+            plt.subplot(222)
+            plt.axvline(sigma[jbest2], color="green", label="Best $\sigma$")
+            label = "Best $T_C \in [{0:8.2f}, {1:8.2f}]$"
+            label = label.format(tcmin2,  tcmax2)
+            plt.axhspan(tcmin2, tcmax2, color="green", alpha=0.5, label=label)
+            plt.legend()
+
+            plt.tight_layout()
+            plt.show()
+
+    if len(sys_data) == 0:
+        print("No data found for "+sys_direc)
+        return
+
+    sys_data.sort()
+    pressure, tmin, tmax = np.array(sys_data).T
+    label = sys_direc
+    p=plt.errorbar(pressure/10.0, 0.5*(tmin+tmax), yerr=0.5*(tmax-tmin), linestyle="none")
+    color = p[0].get_color()
+    plt.fill_between(pressure/10.0, tmin, tmax, alpha=0.5, label=label, color=color)
+    plt.ylabel("$T_C$ (K, Eliashberg)\n"+r"$\mu^* \in [0.1, 0.15]$")
+    plt.xlabel("Pressure (GPa)")
+    plt.legend()
+    if show: plt.show()
+
+def get_best_a2f_dos_tc(direc):
+    # Get the best a2F.dos{n}.tc file in the given
+    # directory
+    return "a2F.dos10.tc"
+
 def plot_tc_vs_p(direc, show=True, plot_unstable=False):
+
+    if not os.path.isdir(direc):
+        print("{0} is not a directory, skipping...".format(direc))
+        return
+
+    # Check to see if we're using a multi-grid scheme
+    for pdir in os.listdir(direc):
+        if not os.path.isdir(direc+"/"+pdir): continue
+        for subdir in os.listdir(direc+"/"+pdir):
+            if "aux_kpts" in subdir or "primary_kpts" in subdir:
+                print("Using multi-grid scheme for "+direc)
+                return plot_tc_vs_p_aux_primary(direc, show=show, plot_unstable=plot_unstable)
+
+    print("Using single-grid scheme for "+direc)
 
     # Use LaTeX
     plt.rc("text", usetex=True)
@@ -92,21 +279,21 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
     data = []
     for pdir in os.listdir(direc):
 
+        # Check this is a directory
+        if not os.path.isdir(direc+"/"+pdir):
+            continue
+
         # Get the pressure from the relax.out file
         relax_file = direc+"/"+pdir+"/relax.out"
         if not os.path.isfile(relax_file):
-            print(relax_file+" does not exist, trying subdirs...")
-            pdir += "/primary_kpts/"
-            relax_file = direc+"/"+pdir+"/relax.out"
-            if not os.path.isfile(relax_file):
-                print(relax_file+" does not exist, skipping...")
-                continue
+            print(relax_file+" does not exist, skipping...")
+            continue
 
         relax = parse_vc_relax(relax_file)
         pressure = relax["pressure"]
 
         # Check if the a2F.tc file exists
-        a2f_file = direc+"/"+pdir+"/a2F.dos10.tc"
+        a2f_file = direc+"/"+pdir+"/"+get_best_a2f_dos_tc(direc+"/"+pdir)
         if not os.path.isfile(a2f_file):
             print(a2f_file+" does not exist, skipping...")
             continue
@@ -141,14 +328,16 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
 
     # Plot Eliashberg Tc
     plt.subplot(211)
-    plt.fill_between(data[0], data[1], data[2], alpha=0.5, label=label)
+    p = plt.errorbar(data[0], 0.5*(data[1]+data[2]), yerr=0.5*(data[2]-data[1]), linestyle="none")
+    color = p[0].get_color()
+    plt.fill_between(data[0], data[1], data[2], alpha=0.5, label=label, color=color)
     plt.legend()
     plt.xlabel("Pressure (GPa)")
     plt.ylabel("$T_C$ (K)\nEliashberg, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
-    plt.subplot(212)
 
     # Plot Allen-Dynes Tc
-    plt.fill_between(data[0], data[3], data[4], alpha=0.5, label=label)
+    plt.subplot(212)
+    plt.fill_between(data[0], data[3], data[4], alpha=0.5, label=label, color=color)
     plt.legend()
     plt.xlabel("Pressure (GPa)")
     plt.ylabel("$T_C$ (K)\nAllen-Dynes, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
