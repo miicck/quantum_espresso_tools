@@ -2,24 +2,37 @@ from quantum_espresso_tools.symmetry import get_kpoint_grid
 from quantum_espresso_tools.parser   import parse_vc_relax
 import numpy as np
 import numpy.linalg as la
-import seekpath
 import os
 import subprocess
 
 def default_parameters():
+
+    # Default pseudopotential directory is home/pseudopotentials
+    if "HOME" in os.environ:
+        pseudo_dir = os.environ["HOME"]+"/pseudopotentials"
+    else:
+        pseudo_dir = "./"
+
+    # Try to get the number of cores from multiprocessing
+    try:
+        import multiprocessing
+        cores = multiprocessing.cpu_count()
+    except:
+        cores = 1
+
     return {
-    "nodes"          : 1,        # Number of compute nodes to use
+    "nodes"          : cores,    # Number of compute nodes to use
     "cores_per_node" : 1,        # Number of cores per compute node
     "mpirun"         : "mpirun", # Mpi caller (i.e mpirun or aprun)
     "pressure"       : 0,        # Pressure in GPa
-    "press_conv_thr" : 0.05,     # Pressure convergence threshold
-    "ecutwfc"        : 40,       # Plane wave cutoff in Ry
-    "ecutrho"        : 400,      # Density cutoff in Ry
-    "qpoint_spacing" : 0.1,      # Q-point grid spacing in A^-1
+    "press_conv_thr" : 0.5,      # Pressure convergence threshold
+    "ecutwfc"        : 30,       # Plane wave cutoff in Ry
+    "ecutrho"        : 300,      # Density cutoff in Ry
+    "qpoint_spacing" : 0.2,      # Q-point grid spacing in A^-1
     "kpts_per_qpt"   : 8,        # K-point grid (as multiple of q-point grid)
-    "aux_kpts"       : 4,        # Auxilliary k-point grid (as multiple of q-point grid)
+    "aux_kpts"       : 6,        # Auxilliary k-point grid (as multiple of q-point grid)
     "qpt_dense_mult" : 10,       # Ratio of dense (interpolated) qpt grid to coarse q_point_grid
-    "ph_ndos"        : 1000,     # Number of points at which to calculate phonon DOS
+    "ph_ndos"        : 500,      # Number of points at which to calculate phonon DOS
     "elec_band_kpts" : 100,      # Points along the bandstructure
     "pseudo_dir"     : "./",     # Pseudopotential directory
     "forc_conv_thr"  : 1e-5,     # Force convergence threshold
@@ -30,10 +43,11 @@ def default_parameters():
     "symm_tol_angle" : 0.5,      # Symmetry tolerance for angles (degrees)
     "elph_nsig"      : 10,       # Number of smearing witdths to use
     "elph_dsig"      : 0.01,     # Spacing of smearing widths (Ry)
-    "elph_sig_states": 40,       # Maximum smearing width includes roughly this many states
     "lattice"        : 2.15*np.identity(3),               # Crystal lattice in angstrom
     "species"        : [["Li", 7.0, "Li.UPF"]],           # Species of atom/mass/pseudo
     "atoms"          : [["Li",0,0,0],["Li",0.5,0.5,0.5]], # Atom names and x,y,z coords
+    "pseudo_dir"     : pseudo_dir
+    "disk_usage"     : "normal"  # Set to 'minimal' to delete unnessacary files
     }
 
 def read_parameters(filename):
@@ -316,6 +330,7 @@ def create_elph_in(parameters):
     t += "tr2_ph=1.0d-12,\n"
     t += "fildvscf='elph_vscf',\n"
     t += "outdir='.',\n"
+    t += "reduce_io=.true.,\n"
     t += "electron_phonon='interpolated',\n"
     t += "el_ph_sigma={0},\n".format(parameters["elph_dsig"])
     t += "el_ph_nsigma={0},\n".format(int(parameters["elph_nsig"]))
@@ -354,7 +369,7 @@ def create_q2r_in(parameters):
     f.close()
 
 def create_ph_bands_in(parameters):
-        
+
     # Creates the input files for calculating
     # the phonon bandstructure
     t  = "&INPUT\n"
@@ -462,42 +477,47 @@ def run_qe(exe, file_prefix, parameters, dry=False):
             raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
 
 def reduce_to_primitive(parameters):
+
+    try:
+        import seekpath
+        # Return a modified parameter
+        # set with the primitive geometry
+
+        frac_coords  = []
+        atom_numbers = []
+        unique_names = []
+
+        for a in parameters["atoms"]:
+            if not a[0] in unique_names:
+                unique_names.append(a[0])
+
+        for a in parameters["atoms"]:
+            frac_coords.append(a[1:])
+            atom_numbers.append(unique_names.index(a[0]))
+
+        # Use seekpath to get primitive geometry
+        structure = (parameters["lattice"], frac_coords, atom_numbers)
+        prim_geom = seekpath.get_path(
+            structure,
+            with_time_reversal=True,
+            symprec=parameters["symm_tol_cart"],
+            angle_tolerance=parameters["symm_tol_angle"],
+            threshold=0)
+
+        # Convert back to our representation
+        new_atoms = []
+        for t, f in zip(prim_geom["primitive_types"],
+                        prim_geom["primitive_positions"]):
+            new_atoms.append([unique_names[t], f[0], f[1], f[2]])
         
-    # Return a modified parameter
-    # set with the primitive geometry
+        # Overwrite new structure
+        parameters["lattice"]          = prim_geom["primitive_lattice"]
+        parameters["atoms"]            = new_atoms
+        parameters["bz_path"]          = prim_geom["path"]
+        parameters["high_symm_points"] = prim_geom["point_coords"]
 
-    frac_coords  = []
-    atom_numbers = []
-    unique_names = []
-
-    for a in parameters["atoms"]:
-        if not a[0] in unique_names:
-            unique_names.append(a[0])
-
-    for a in parameters["atoms"]:
-        frac_coords.append(a[1:])
-        atom_numbers.append(unique_names.index(a[0]))
-
-    # Use seekpath to get primitive geometry
-    structure = (parameters["lattice"], frac_coords, atom_numbers)
-    prim_geom = seekpath.get_path(
-        structure,
-        with_time_reversal=True,
-        symprec=parameters["symm_tol_cart"],
-        angle_tolerance=parameters["symm_tol_angle"],
-        threshold=0)
-
-    # Convert back to our representation
-    new_atoms = []
-    for t, f in zip(prim_geom["primitive_types"],
-                    prim_geom["primitive_positions"]):
-        new_atoms.append([unique_names[t], f[0], f[1], f[2]])
-    
-    # Overwrite new structure
-    parameters["lattice"] = prim_geom["primitive_lattice"]
-    parameters["atoms"]   = new_atoms
-    parameters["bz_path"] = prim_geom["path"]
-    parameters["high_symm_points"] = prim_geom["point_coords"]
+    except:
+        print("Could not import seekpath. Will not reduce to primitive/plot bandstructure.")
 
     # Work out qpoint_grid
     if "qpoint_grid" in parameters:
@@ -552,33 +572,39 @@ def run(parameters, dry=False, aux_kpts=False):
     create_scf_in(parameters)
     run_qe("pw.x", "scf", parameters, dry=dry)
 
-    # Extract the eigenvalues
-    create_extract_evals_in(parameters)
-    run_qe("bands.x", "extract_evals", parameters, dry=dry)
-
     # Run elec-phonon calculation
     create_elph_in(parameters)
     run_qe("ph.x", "elph", parameters, dry=dry)
+    if parameters["disk_usage"] == "minimal":
+        os.system("rm -r _ph0")
+    p.terminate()
 
     # Convert dynamcial matricies etc to real space
     create_q2r_in(parameters)
     run_qe("q2r.x", "q2r", parameters, dry=dry)
 
-    # Caclulate the phonon bandstructure
-    create_ph_bands_in(parameters)
-    run_qe("matdyn.x", "ph_bands", parameters, dry=dry)
-
     # Caclulate the phonon density of states
     create_ph_dos_in(parameters)
     run_qe("matdyn.x", "ph_dos", parameters, dry=dry)
 
-    # Caculate the electronic bandstructure
-    create_bands_in(parameters)
-    run_qe("pw.x", "bands", parameters, dry=dry)
+    # Extract the eigenvalues
+    create_extract_evals_in(parameters)
+    run_qe("bands.x", "extract_evals", parameters, dry=dry)
 
-    # Re-order bands and calc band-related things
-    create_bands_x_in(parameters)
-    run_qe("bands.x", "bands.x", parameters, dry=dry)
+    # Only do the following if we have a brillouin zone path
+    if "bz_path" in parameters:
+
+        # Caclulate the phonon bandstructure
+        create_ph_bands_in(parameters)
+        run_qe("matdyn.x", "ph_bands", parameters, dry=dry)
+
+        # Caculate the electronic bandstructure
+        create_bands_in(parameters)
+        run_qe("pw.x", "bands", parameters, dry=dry)
+
+        # Re-order bands and calc band-related things
+        create_bands_x_in(parameters)
+        run_qe("bands.x", "bands.x", parameters, dry=dry)
 
 def calculate(infile, dry=False):
 
