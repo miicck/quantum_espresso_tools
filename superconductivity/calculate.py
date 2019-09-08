@@ -21,8 +21,8 @@ def default_parameters():
         cores = 1
 
     return {
-    "nodes"          : cores,    # Number of compute nodes to use
-    "cores_per_node" : 1,        # Number of cores per compute node
+    "nodes"          : 1,        # Number of compute nodes to use
+    "cores_per_node" : cores,    # Number of cores per compute node
     "mpirun"         : "mpirun", # Mpi caller (i.e mpirun or aprun)
     "pressure"       : 0,        # Pressure in GPa
     "press_conv_thr" : 0.5,      # Pressure convergence threshold
@@ -46,7 +46,7 @@ def default_parameters():
     "lattice"        : 2.15*np.identity(3),               # Crystal lattice in angstrom
     "species"        : [["Li", 7.0, "Li.UPF"]],           # Species of atom/mass/pseudo
     "atoms"          : [["Li",0,0,0],["Li",0.5,0.5,0.5]], # Atom names and x,y,z coords
-    "pseudo_dir"     : pseudo_dir
+    "pseudo_dir"     : pseudo_dir,
     "disk_usage"     : "normal"  # Set to 'minimal' to delete unnessacary files
     }
 
@@ -516,8 +516,15 @@ def reduce_to_primitive(parameters):
         parameters["bz_path"]          = prim_geom["path"]
         parameters["high_symm_points"] = prim_geom["point_coords"]
 
-    except:
-        print("Could not import seekpath. Will not reduce to primitive/plot bandstructure.")
+        outf = parameters["out_file"]
+        outf.write("Successfully reduced to primitive geometry using seekpath.\n")
+
+    except ImportError:
+
+        outf = parameters["out_file"]
+        outf.write("Could not import seekpath =>\n")
+        outf.write("    1. We will not reduce to the primitive geometry\n")
+        outf.write("    2. We cannot obtain Brillouin zone paths => no bandstructure plots\n")
 
     # Work out qpoint_grid
     if "qpoint_grid" in parameters:
