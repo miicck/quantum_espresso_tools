@@ -584,7 +584,6 @@ def run(parameters, dry=False, aux_kpts=False):
     run_qe("ph.x", "elph", parameters, dry=dry)
     if parameters["disk_usage"] == "minimal":
         os.system("rm -r _ph0")
-    p.terminate()
 
     # Convert dynamcial matricies etc to real space
     create_q2r_in(parameters)
