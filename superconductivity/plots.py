@@ -98,7 +98,8 @@ def plot_tc_vs_p_aux_primary(
     sys_direc, 
     show=True, 
     plot_unstable=False, 
-    plot_double_delta_info=False):
+    plot_double_delta_info=False,
+    plot_allen=False):
     
     # Plot Tc vs pressure for all of the pressure directories in
     # sys_direc, using primary and auxillary k-point grids to
@@ -265,7 +266,7 @@ def get_best_a2f_dos_tc(direc):
     # directory
     return "a2F.dos10.tc"
 
-def plot_tc_vs_p(direc, show=True, plot_unstable=False):
+def plot_tc_vs_p(direc, show=True, plot_unstable=False, plot_allen=False):
 
     # Use LaTeX
     plt.rc("text", usetex=True)
@@ -280,7 +281,8 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
         for subdir in os.listdir(direc+"/"+pdir):
             if "aux_kpts" in subdir or "primary_kpts" in subdir:
                 print("Using multi-grid scheme for "+direc)
-                return plot_tc_vs_p_aux_primary(direc, show=show, plot_unstable=plot_unstable)
+                return plot_tc_vs_p_aux_primary(direc, show=show, 
+                    plot_unstable=plot_unstable, plot_allen=plot_allen)
 
     print("Using single-grid scheme for "+direc)
 
@@ -336,8 +338,8 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
     label = convert_common_labels(direc)
 
     # Plot Eliashberg Tc
-    plt.subplot(211)
-    p = plt.errorbar(data[0], 0.5*(data[1]+data[2]), yerr=0.5*(data[2]-data[1]), linestyle="none")
+    if plot_allen: plt.subplot(211)
+    p = plt.plot(data[0], 0.5*(data[1]+data[2]), linestyle="none")
     color = p[0].get_color()
     plt.fill_between(data[0], data[1], data[2], alpha=0.5, label=label, color=color)
     plt.legend()
@@ -345,11 +347,12 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
     plt.ylabel("$T_C$ (K)\nEliashberg, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
 
     # Plot Allen-Dynes Tc
-    plt.subplot(212)
-    plt.fill_between(data[0], data[3], data[4], alpha=0.5, label=label, color=color)
-    plt.legend()
-    plt.xlabel("Pressure (GPa)")
-    plt.ylabel("$T_C$ (K)\nAllen-Dynes, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
+    if plot_allen:
+        plt.subplot(212)
+        plt.fill_between(data[0], data[3], data[4], alpha=0.5, label=label, color=color)
+        plt.legend()
+        plt.xlabel("Pressure (GPa)")
+        plt.ylabel("$T_C$ (K)\nAllen-Dynes, $\mu^* \in [{0},{1}]$".format(mu1, mu2))
 
     if show: plt.show()
 

@@ -463,8 +463,7 @@ def run_qe(exe, file_prefix, parameters, dry=False):
         exe = eb + "/" + exe
     
     # Invoke the program 
-    nk = min(nodes*2, np)
-    qe_flags = "-nk {0}".format(nk)
+    qe_flags = "-nk {0}".format(np)
     cmd = "{0} {1} {2} <{3}.in> {3}.out".format(mpirun, exe, qe_flags, file_prefix) 
     parameters["out_file"].write("Running: "+cmd+"\n")
     os.system(cmd)
