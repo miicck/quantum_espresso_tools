@@ -8,6 +8,8 @@ def convert_common_labels(label):
     if "c2m" in label: return "$C_2m$"
     if "fm3m" in label: return r"$Fm\bar{3}m$"
     if "p63mmc" in label: return "$P6_3/mmc$"
+    if "cmcm" in label: return "$cmcm$"
+    if "r3m" in label: return "$R3m$"
     return label
 
 def plot_tc_vs_smearing(directories):
@@ -65,9 +67,18 @@ def plot_tc_vs_smearing_single(direc, show=True):
     data1[0] *= sig_incr
     data2[0] *= sig_incr
 
+    label = direc
+    if "kpq_" in label: label = "{0} k-points per q-point".format(int(label.split("kpq_")[-1])**3)
+    if "_qpts" in label:
+        n = label.split("_")[0]
+        append = "(Primary)"
+        if "aux" in label:
+            append = "(Auxillary)"
+        label = r"${0} \times {0} \times {0}$ ".format(n)+append
+
     plt.subplot(211)
     p = plt.plot(data1[0], (data1[1] + data2[1])/2, marker="+", linestyle=":")
-    plt.fill_between(data1[0], data1[1], data2[1], alpha=0.15, color=p[0].get_color(), label=direc)
+    plt.fill_between(data1[0], data1[1], data2[1], alpha=0.15, color=p[0].get_color(), label=label)
     plt.xlabel(xlabel)
     plt.xlim([0, max(data1[0])])
     plt.ylabel("Tc (K) - Eliashberg \n $\mu^* \in [{0},{1}]$".format(*mus))
@@ -75,7 +86,7 @@ def plot_tc_vs_smearing_single(direc, show=True):
 
     plt.subplot(212)
     p = plt.plot(data1[0], (data1[2] + data2[2])/2, marker="+", linestyle=":")
-    plt.fill_between(data1[0], data1[2], data2[2], alpha=0.15, color=p[0].get_color(), label=direc)
+    plt.fill_between(data1[0], data1[2], data2[2], alpha=0.15, color=p[0].get_color(), label=label)
     plt.xlabel(xlabel)
     plt.xlim([0, max(data1[0])])
     plt.ylabel("Tc (K) - Mcmillan-Allen-Dynes \n $\mu^* \in [{0},{1}]$".format(*mus))
@@ -242,10 +253,8 @@ def plot_tc_vs_p_aux_primary(
 
     sys_data.sort()
     pressure, tmin, tmax = np.array(sys_data).T
-    label = sys_direc
-    p=plt.errorbar(pressure/10.0, 0.5*(tmin+tmax), yerr=0.5*(tmax-tmin), linestyle="none")
-    color = p[0].get_color()
-    plt.fill_between(pressure/10.0, tmin, tmax, alpha=0.5, label=label, color=color)
+    label = convert_common_labels(sys_direc)
+    plt.fill_between(pressure/10.0, tmin, tmax, alpha=0.5, label=label)
     plt.ylabel("$T_C$ (K, Eliashberg)\n"+r"$\mu^* \in [0.1, 0.15]$")
     plt.xlabel("Pressure (GPa)")
     plt.legend()
@@ -257,6 +266,9 @@ def get_best_a2f_dos_tc(direc):
     return "a2F.dos10.tc"
 
 def plot_tc_vs_p(direc, show=True, plot_unstable=False):
+
+    # Use LaTeX
+    plt.rc("text", usetex=True)
 
     if not os.path.isdir(direc):
         print("{0} is not a directory, skipping...".format(direc))
@@ -271,9 +283,6 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False):
                 return plot_tc_vs_p_aux_primary(direc, show=show, plot_unstable=plot_unstable)
 
     print("Using single-grid scheme for "+direc)
-
-    # Use LaTeX
-    plt.rc("text", usetex=True)
 
     # Collect data for different pressures in this directory
     data = []

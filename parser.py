@@ -38,6 +38,10 @@ def parse_vc_relax(filename):
                                 except:
                                         break
 
+                # Parse enthalpy (in case final enthalpy is absent for some reason)
+                if "enthalpy new" in line:
+                        data["enthalpy"] = float(line.split("=")[-1].split("r")[0]) 
+
                 # Parse final enthalpy
                 if "final enthalpy" in line:
                         data["enthalpy"] = float(line.split("=")[-1].split("r")[0])
