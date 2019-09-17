@@ -60,7 +60,7 @@ def read_parameters(filename):
     f.close()
     
     i_ignored = []
-    string_args = ["pseudo_dir"]
+    string_args = ["pseudo_dir", "disk_usage"]
     int_args    = ["nodes", "cores_per_node"]
 
     for i, l in enumerate(lines):
@@ -611,7 +611,54 @@ def run(parameters, dry=False, aux_kpts=False):
         create_bands_x_in(parameters)
         run_qe("bands.x", "bands.x", parameters, dry=dry)
 
-def calculate(infile, dry=False):
+def run_dir(directory, infile, dry, aux_kpts):
+    
+    # Run the calculation in the given directory,
+    # with the given input file
+    os.chdir(directory)
+    params = read_parameters(infile)
+    run(params, dry=dry, aux_kpts=aux_kpts)
+
+def submit_calc(directory, infile, submit, dry, aux_kpts):
+    
+    # Submit the calculation in the given directory
+    os.chdir(directory)
+    params = read_parameters(infile)
+
+    if submit is None:
+
+        # Actually run the calculation
+        run(params, dry=dry, aux_kpts=aux_kpts)
+
+    elif submit.startswith("csd3"):
+        
+        # Choose service level
+        sub_file = "slurm_submit_csd3_sl4"
+        if "sl3" in submit:
+            sub_file = "slurm_submit_csd3_sl3"
+
+        # Submit the calculation to CSD3 via SLURM
+        script_dir = os.path.realpath(__file__)
+        script_dir = "/".join(script_dir.split("/")[0:-1])
+
+        # Copy the slurm submission script
+        sub_script = script_dir+"/"+sub_file
+        os.system("cp "+sub_script+" "+directory)
+
+        # Create the python runscript
+        r  = "from quantum_espresso_tools.superconductivity.calculate import run_dir\n"
+        r += "run_dir('{0}', '{1}', {2}, {3})".format(directory, infile, dry, aux_kpts)
+        with open(directory+"/run.py", "w") as f:
+            f.write(r)
+
+        # If is a dry run, simply run it, otherwise submit it
+        if dry: os.system("python2.7 run.py")
+        else:   os.system("sbatch "+sub_file)
+
+    else:
+        print("Unkown submission system: "+submit)
+
+def calculate(infile, dry=False, submit=None):
 
     # Base directory and auxillary k-point directory
     base_dir    = os.getcwd()
@@ -622,11 +669,9 @@ def calculate(infile, dry=False):
     # (do this first because it's faster)
     os.system("mkdir " + aux_dir + " 2>/dev/null")
     os.system("cp "    + infile  + " " + aux_dir)
-    os.chdir(aux_dir)
-    run(read_parameters(infile), dry=dry, aux_kpts=True)
+    submit_calc(aux_dir, infile, submit, dry, True)
 
     # Run normal k-point grid
     os.system("mkdir " + primary_dir  + " 2>/dev/null")
     os.system("cp "    + infile + " " + primary_dir)
-    os.chdir(primary_dir)
-    run(read_parameters(infile), dry=dry)
+    submit_calc(primary_dir, infile, submit, dry, False)
