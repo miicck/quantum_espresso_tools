@@ -611,6 +611,15 @@ def run(parameters, dry=False, aux_kpts=False):
         create_bands_x_in(parameters)
         run_qe("bands.x", "bands.x", parameters, dry=dry)
 
+def is_run_complete():
+
+    # Checks to see if a run is complete by
+    # checking the last calculation is done
+    if not os.path.isfile("extract_evals.out"):
+        return False
+    with open("extract_evals.out") as f:
+        return "JOB DONE" in f.read()
+
 def run_dir(directory, infile, dry, aux_kpts):
     
     # Run the calculation in the given directory,
@@ -653,8 +662,11 @@ def submit_calc(directory, infile, submit, dry, aux_kpts):
 
         # If is a dry run, simply run it, otherwise submit it
         if dry: os.system("python2.7 run.py")
-        else:   os.system("sbatch "+sub_file)
-
+        else:
+            if is_run_complete():
+                print("{0} already complete, refusing to submit.".format(directory))
+            else:
+                os.system("sbatch "+sub_file)
     else:
         print("Unkown submission system: "+submit)
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J qmc
+#SBATCH -J elec_phon
 #SBATCH -A NEEDS-SL2-CPU
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
