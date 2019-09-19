@@ -1,0 +1,3 @@
+import sys
+from quantum_espresso_tools.superconductivity.plots import plot_tc_vs_smearing
+plot_tc_vs_smearing(sys.argv)

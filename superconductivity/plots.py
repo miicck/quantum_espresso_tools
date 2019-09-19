@@ -279,7 +279,11 @@ def get_best_a2f_dos_tc(direc):
     # directory
     return "a2F.dos10.tc"
 
-def plot_tc_vs_p(direc, show=True, plot_unstable=False, plot_allen=False):
+def plot_tc_vs_p(direc, 
+    show=True, 
+    plot_unstable=False, 
+    plot_allen=False,
+    plot_double_delta_info=False):
 
     # Use LaTeX
     plt.rc("text", usetex=True)
@@ -295,7 +299,8 @@ def plot_tc_vs_p(direc, show=True, plot_unstable=False, plot_allen=False):
             if "aux_kpts" in subdir or "primary_kpts" in subdir:
                 print("Using multi-grid scheme for "+direc)
                 return plot_tc_vs_p_aux_primary(direc, show=show, 
-                    plot_unstable=plot_unstable, plot_allen=plot_allen)
+                    plot_unstable=plot_unstable, plot_allen=plot_allen,
+                    plot_double_delta_info=plot_double_delta_info)
 
     print("Using single-grid scheme for "+direc)
 
