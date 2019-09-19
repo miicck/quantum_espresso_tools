@@ -666,6 +666,7 @@ def submit_calc(directory, infile, submit, dry, aux_kpts):
             if is_run_complete():
                 print("{0} already complete, refusing to submit.".format(directory))
             else:
+                print("Submitting {0}".format(directory))
                 os.system("sbatch "+sub_file)
     else:
         print("Unkown submission system: "+submit)
