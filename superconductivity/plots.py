@@ -189,11 +189,25 @@ def plot_tc_vs_p_aux_primary(
         dtc1  = list(abs(grids_data[0]["tc1"] - grids_data[1]["tc1"]))
         dtc2  = list(abs(grids_data[0]["tc2"] - grids_data[1]["tc2"]))
 
-        jmin1 = max([j for j in range(0, len(dtc1)) if dtc1[j] > dtc1[-1]])
-        jmin2 = max([j for j in range(0, len(dtc2)) if dtc2[j] > dtc2[-1]])
+        # Find the best sigma <=> j by backtracking from
+        # the largest smearing until the difference between
+        # the two k-point grid deviates from its max-smearing
+        # value by more than 10%
+        keep  = lambda a, b : abs((a-b)/b) < 0.1
 
-        jbest1 = dtc1.index(min([dt for dt in dtc1[jmin1:]])) 
-        jbest2 = dtc2.index(min([dt for dt in dtc2[jmin2:]])) 
+        for jbest1 in range(len(dtc1)-1, -1, -1):
+            a = dtc1[jbest1]
+            b = dtc1[-1]
+            if not keep(a,b):
+                jbest1 -= 1
+                break
+
+        for jbest2 in range(len(dtc2)-1, -1, -1):
+            a = dtc2[jbest2]
+            b = dtc2[-1]
+            if not keep(a,b):
+                jbest2 -= 1
+                break
 
         tbest01 = grids_data[0]["tc1"][jbest1]
         tbest11 = grids_data[1]["tc1"][jbest1]
@@ -219,7 +233,6 @@ def plot_tc_vs_p_aux_primary(
             plt.plot(sigma, dtc1)
             plt.xlabel("$\sigma (Ry)$")
             plt.ylabel("$\Delta T_C (K)$, Eliashberg\n$\mu^* = 0.1$")
-            plt.axvline(sigma[jmin1],  color="black", linestyle=":", label="Min considered $\sigma$")
             plt.axvline(sigma[jbest1], color="green", label="Best $\sigma$")
             plt.legend()
 
@@ -234,7 +247,6 @@ def plot_tc_vs_p_aux_primary(
             plt.plot(sigma, dtc2)
             plt.xlabel("$\sigma (Ry)$")
             plt.ylabel("$\Delta T_C (K)$, Eliashberg\n$\mu^* = 0.15$")
-            plt.axvline(sigma[jmin2], color="black", linestyle=":", label="Min considered $\sigma$")
             plt.axvline(sigma[jbest2], color="green", label="Best $\sigma$")
             plt.legend()
 
