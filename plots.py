@@ -1,5 +1,5 @@
 from quantum_espresso_tools.parser import parse_vc_relax, parse_phonon_dos
-from quantum_espresso_tools.fits import fit_birch_murnaghan
+from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -182,9 +182,8 @@ def plot_gibbs_vs_pressure(system_dirs):
 
         if frel is None:
 
-            # Fit this data to Birch-Murnaghan in order
-            # to plot the relative gibbs F.E
-            frel, par, cov = fit_birch_murnaghan(vs, es, pdata=ps, fallback=True)
+            # Fit this data to a cubic spline
+            frel = CubicSpline(ps, es + de)
 
         label = direc
         if "c2m"    in label : label =  "$C_2m$"
@@ -194,13 +193,13 @@ def plot_gibbs_vs_pressure(system_dirs):
         if "cmcm"   in label : label =  "$cmcm$"
 
         # Plot gibbs free energy at 300K
-        p = plt.plot(ps/10.0, (es - frel(vs) + de)*RY_TO_MEV, label=label)
+        p = plt.plot(ps/10.0, (es - frel(ps) + de)*RY_TO_MEV, label=label)
         col = p[0].get_color()
 
         # Plot gibbs free energy at 0K
-        plt.plot(ps/10.0, (es - frel(vs))*RY_TO_MEV, linestyle=":", color=col)
-        plt.scatter(pss/10.0, (ess - frel(vss) + des)*RY_TO_MEV, color=col)
-        plt.scatter(psu/10.0, (esu - frel(vsu) + deu)*RY_TO_MEV, marker="x", color=col)
+        plt.plot(ps/10.0, (es - frel(ps))*RY_TO_MEV, linestyle=":", color=col)
+        plt.scatter(pss/10.0, (ess - frel(pss) + des)*RY_TO_MEV, color=col)
+        plt.scatter(psu/10.0, (esu - frel(psu) + deu)*RY_TO_MEV, marker="x", color=col)
 
     plt.xlabel("Pressure (GPa)")
     plt.ylabel("Gibbs free energy\n(meV/atom, relative)")
