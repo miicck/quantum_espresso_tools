@@ -117,11 +117,15 @@ def plot_tc_vs_p_aux_primary(
         if not os.path.isdir(pdir): continue
 
         grids_data = []
+        i_grid_best = 0
 
         # Look over k-point grid directories
         for grid_dir in os.listdir(pdir):
             grid_dir = pdir + "/" + grid_dir
             if not os.path.isdir(grid_dir): continue
+
+            if "primary" in grid_dir:
+                i_grid_best = len(grids_data)
 
             relax   = None
             tc_data = []
@@ -210,19 +214,13 @@ def plot_tc_vs_p_aux_primary(
                 jbest2 += 1
                 break
 
-        tbest01 = grids_data[0]["tc1"][jbest1]
-        tbest11 = grids_data[1]["tc1"][jbest1]
-        tbest02 = grids_data[0]["tc2"][jbest2]
-        tbest12 = grids_data[1]["tc2"][jbest2]
+        tbest1 = grids_data[i_grid_best]["tc1"][jbest1]
+        tbest2 = grids_data[i_grid_best]["tc2"][jbest2]
 
-        tcmin1 = min(tbest01, tbest11)
-        tcmax1 = max(tbest01, tbest11)
-        tcmin2 = min(tbest02, tbest12)
-        tcmax2 = max(tbest02, tbest12)
-
-        tcmax = max(tcmax1, tcmax2)
-        tcmin = min(tcmin1, tcmin2)
+        tcmax = max(tbest1, tbest2)
+        tcmin = min(tbest1, tbest2)
         tcav  = 0.5*(tcmax+tcmin)
+
         pressure  = np.mean([gd["pressure"] for gd in grids_data])
         dpressure = np.std([gd["pressure"] for gd in grids_data])
         sys_data.append([pressure, tcmin, tcmax])

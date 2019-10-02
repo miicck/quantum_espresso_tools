@@ -121,18 +121,23 @@ def plot_gibbs_vs_pressure(system_dirs):
             dos_file   = p_dir + "/phonon.dos"
 
             if not os.path.isfile(relax_file):
-                print("{0} does not exist, trying subdirectories".format(relax_file))
                 relax_file = p_dir + "/primary_kpts/relax.out"
                 if not os.path.isfile(relax_file):
-                    print("{0} does not exist, skipping...".format(relax_file))
-                    continue
+                    relax_file = p_dir + "/aux_kpts/relax.out"
+                    if not os.path.isfile(relax_file):
+                        print("{0} does not exist, skipping...".format(relax_file))
+                        continue
 
             if not os.path.isfile(dos_file):
-                print("{0} does not exist, trying subdirectories".format(dos_file))
                 dos_file = p_dir + "/primary_kpts/phonon.dos"
                 if not os.path.isfile(dos_file):
-                    print("{0} does not exist, skipping...".format(dos_file))
-                    continue
+                    dos_file = p_dir + "/aux_kpts/phonon.dos"
+                    if not os.path.isfile(dos_file):
+                        print("{0} does not exist, skipping...".format(dos_file))
+                        continue
+
+            print(relax_file)
+            print(dos_file)
 
             # Read in phonon density of states
             omegas, pdos = parse_phonon_dos(dos_file)
