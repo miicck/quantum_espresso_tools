@@ -126,6 +126,11 @@ def read_parameters(filename):
         elif key == "qpoint_grid":
             ret["qpoint_grid"] = [int(q) for q in l.split()[1:4]]
             continue
+
+        # Parse primary/aux k-point grid
+        elif key == "kpts_per_qpt" or key == "aux_kpts":
+            ret[key] = [int(k) for k in l.split()[1:]]
+            continue
                         
         # Parse key-value pairs from the input file
         val = l.split()[1]
@@ -542,7 +547,8 @@ def reduce_to_primitive(parameters):
     # Work out k-point grid from q-point grid and
     # k-points per qpoint
     kpq = parameters["kpts_per_qpt"]
-    parameters["kpoint_grid"] = [int(q*kpq) for q in parameters["qpoint_grid"]]
+    qpg = parameters["qpoint_grid"]
+    parameters["kpoint_grid"] = [int(q*k) for q,k in zip(qpg, kpq)]
 
     # Return resulting new parameter set
     return parameters
@@ -652,7 +658,16 @@ def submit_calc(directory, infile, submit, dry, aux_kpts):
 
         # Copy the slurm submission script
         sub_script = script_dir+"/"+sub_file
-        os.system("cp "+sub_script+" "+directory)
+        with open(sub_script) as f:
+            sub_text = f.read()
+
+        # Create the submission script with the given core/node count
+        with open(directory+"/"+sub_file, "w") as f:
+            cores_total = params["cores_per_node"]*params["nodes"]
+            f.write(sub_text.format(
+                nodes=params["nodes"],
+                cores_total=cores_total
+                ))
 
         # Create the python runscript
         r  = "from quantum_espresso_tools.superconductivity.calculate import run_dir\n"

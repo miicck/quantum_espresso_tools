@@ -2,8 +2,8 @@
 
 #SBATCH -J elec_phon
 #SBATCH -A NEEDS-SL2-CPU
-#SBATCH --nodes=1
-#SBATCH --ntasks=32
+#SBATCH --nodes={nodes}
+#SBATCH --ntasks={cores_total}
 #SBATCH --time=12:00:00
 #SBATCH --mail-type=FAIL
 ##SBATCH --no-requeue
@@ -17,7 +17,6 @@ module purge                               # Removes all modules still loaded
 module load rhel7/default-peta4            # REQUIRED - loads the basic environment
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
 export OMP_NUM_THREADS=1
-np=$[${numnodes}*${mpi_tasks_per_node}]
 export I_MPI_PIN_DOMAIN=omp:compact # Domains are $OMP_NUM_THREADS cores in size
 export I_MPI_PIN_ORDER=scatter # Adjacent domains have minimal sharing of caches/sockets
 
