@@ -1,5 +1,6 @@
 from quantum_espresso_tools.parser import parse_vc_relax, parse_phonon_dos
 from scipy.interpolate import CubicSpline
+from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -109,6 +110,7 @@ def plot_gibbs_vs_pressure(system_dirs):
     frel = None # Will hold a model for E(v)
     plt.rc("text", usetex=True) # Use LaTeX
 
+    all_data = []
     for direc in system_dirs:
         if not os.path.isdir(direc): continue
 
@@ -158,7 +160,7 @@ def plot_gibbs_vs_pressure(system_dirs):
             zpe = np.trapz([0.5*w*d for w,d in wd], x=[w for w,d in wd])/nat
 
             # Caclulate occupational contribution to
-            # phonon free energy as 300 K
+            # phonon free energy at 300 K
             t   = 300.0 / RY_TO_K
             occ = t*np.trapz([d*np.log(1 - np.exp(-w/t)) for w,d in wd], x=[w for w,d in wd])/nat
 
@@ -179,6 +181,9 @@ def plot_gibbs_vs_pressure(system_dirs):
 
         # Get stable, unstable and all data
         data.sort()
+        all_data.append([direc, data])
+
+    for direc, data in all_data:
         try: pss, vss, ess, des = np.array([d[0:-1] for d in data if d[-1] > 0.1]).T
         except ValueError: pss, vss, ess, des = [np.array([]) for i in range(0,4)] 
         try: psu, vsu, esu, deu = np.array([d[0:-1] for d in data if d[-1] < 0.1]).T
