@@ -1,4 +1,5 @@
 from quantum_espresso_tools.parser import parse_vc_relax, parse_phonon_dos
+from quantum_espresso_tools.fits import fit_birch_murnaghan
 from scipy.interpolate import CubicSpline
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import os
 RY_TO_K   = 157887.6633481157
 RY_TO_CMM = 109736.75775046606
 RY_TO_MEV = 13.605698065893753*1000.0 
+KBAR_AU3_TO_RY = 1/(5.0*29421.02648438959)
 
 # Plot a density of states, (or partial density of states)
 def plot_dos(ws, pdos, labels=None, fermi_energy=0):
@@ -107,7 +109,6 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_c
 
 def plot_gibbs_vs_pressure(system_dirs):
     
-    frel = None # Will hold a model for E(v)
     plt.rc("text", usetex=True) # Use LaTeX
 
     all_data = []
@@ -122,6 +123,7 @@ def plot_gibbs_vs_pressure(system_dirs):
             relax_file = p_dir + "/relax.out"
             dos_file   = p_dir + "/phonon.dos"
 
+            # Read results of geometry optimization (try a few possible locations)
             if not os.path.isfile(relax_file):
                 relax_file = p_dir + "/primary_kpts/relax.out"
                 if not os.path.isfile(relax_file):
@@ -130,6 +132,7 @@ def plot_gibbs_vs_pressure(system_dirs):
                         print("{0} does not exist, skipping...".format(relax_file))
                         continue
 
+            # Read phonon density of states (try a few possible locations)
             if not os.path.isfile(dos_file):
                 dos_file = p_dir + "/primary_kpts/phonon.dos"
                 if not os.path.isfile(dos_file):
@@ -137,9 +140,6 @@ def plot_gibbs_vs_pressure(system_dirs):
                     if not os.path.isfile(dos_file):
                         print("{0} does not exist, skipping...".format(dos_file))
                         continue
-
-            print(relax_file)
-            print(dos_file)
 
             # Read in phonon density of states
             omegas, pdos = parse_phonon_dos(dos_file)
@@ -151,6 +151,7 @@ def plot_gibbs_vs_pressure(system_dirs):
             pressure = relax["pressure"]
             volume   = relax["volume"]/nat
             enthalpy = relax["enthalpy"]/nat
+            energy   = relax["energy"]/nat
 
             # Normalize dos to # of phonon states
             dos = 3*nat*dos/np.trapz(dos, x=omegas)
@@ -172,44 +173,183 @@ def plot_gibbs_vs_pressure(system_dirs):
                 break
 
             # Save data
-            gibbs = zpe + enthalpy
-            data.append([pressure, volume, gibbs, occ, stable])
+            data.append([volume, energy, enthalpy, zpe, occ, pressure, stable])
 
         if len(data) == 0:
             print("No data for "+direc)
             continue
 
-        # Get stable, unstable and all data
-        data.sort()
+        # Sort data by inverse volume <=> pressure
+        data.sort(key=lambda d:1/d[0])
         all_data.append([direc, data])
 
+    hrel  = None
+    erel  = None
+    pvrel = None
+
     for direc, data in all_data:
-        try: pss, vss, ess, des = np.array([d[0:-1] for d in data if d[-1] > 0.1]).T
-        except ValueError: pss, vss, ess, des = [np.array([]) for i in range(0,4)] 
-        try: psu, vsu, esu, deu = np.array([d[0:-1] for d in data if d[-1] < 0.1]).T
-        except ValueError: psu, vsu, esu, deu = [np.array([]) for i in range(0,4)]
-        ps,  vs,  es,  de, stable = np.array(data).T
+        
+        # Get the data for this system
+        vs, es, enthalpy, zpes, occs, dft_ps, ss = np.array(data).T
+        pvs = dft_ps*vs*KBAR_AU3_TO_RY
 
-        if frel is None:
+        if hrel is None:
+            hrel = CubicSpline(dft_ps, enthalpy)
 
-            # Fit this data to a cubic spline
-            frel = CubicSpline(ps, es + de)
+        plt.subplot(313)
+        plt.plot(dft_ps, (enthalpy-hrel(dft_ps))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("Enthalpy (meV/atom)")
+
+        if erel is None:
+            erel = CubicSpline(dft_ps, es)
+
+        plt.subplot(312)
+        plt.plot(dft_ps, (es-erel(dft_ps))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("E (meV/atom)")
+
+        if pvrel is None:
+            pvrel = CubicSpline(dft_ps, pvs)
+
+        plt.subplot(311)
+        plt.plot(dft_ps, (pvs - pvrel(dft_ps))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("PV (meV/atom)")
+
+    plt.figure()
+
+    # Get the data at the phonon-corrected pressures
+    corrected_data = []
+    for direc, data in all_data:
+        
+        # Get the data for this system
+        vs, es, enthalpy, zpes, occs, dft_ps, ss = np.array(data).T
+
+        # Only fit to the stable points
+        include_unstable = False
+        vfit    = [v for v, s in zip(vs, ss)           if s or include_unstable]
+        pfit    = [p for p, s in zip(dft_ps, ss)       if s or include_unstable]
+        efit0   = [e for e, s in zip(es+zpes, ss)      if s or include_unstable]
+        efit300 = [e for e, s in zip(es+zpes+occs, ss) if s or include_unstable]
+
+        # Fit the birch murnaghan E.O.S at 0 K
+        # and calculate the gibbs as a function of corrected pressure
+        e_model, p_model, par, cov = fit_birch_murnaghan(vfit, efit0, p_guess=pfit)
+        ps_corrected_0K = p_model(vs)
+        gibbs_0K        = es + zpes + KBAR_AU3_TO_RY*ps_corrected_0K*vs 
+        gibbs_0K_dft    = enthalpy + zpes
+
+        # Fit the birch murnaghan E.O.S at 300 K
+        # and calculate the gibbs as a function of corrected pressure
+        e_model, p_model, par, cov = fit_birch_murnaghan(vfit, efit300, p_guess=pfit)
+        ps_corrected_300K = p_model(vs)
+        gibbs_300K        = es + zpes + occs + KBAR_AU3_TO_RY*ps_corrected_300K*vs
+        gibbs_300K_dft    = enthalpy + zpes + occs
+
+        # Store the results
+        corrected_data.append([
+            direc, 
+            vs,
+            es,
+            zpes,
+            occs,
+            dft_ps,
+            ps_corrected_300K, 
+            ps_corrected_0K, 
+            ss
+        ])
+
+        plot_fitting_info = True
+        if plot_fitting_info:
+
+            plt.subplot(221)
+            plt.plot(vs, (es + zpes - e_model(vs))*RY_TO_MEV)
+            plt.ylabel("Birch murnaghan fit error (meV)")
+            plt.xlabel("Volume/atom")
+
+            plt.subplot(222)
+            plt.plot(vs, ps_corrected_0K-dft_ps,   label="B-M pressure correction (0K)", linestyle=":")
+            plt.plot(vs, ps_corrected_300K-dft_ps, label="B-M pressure correction (300K)")
+            plt.ylabel("Pressure (KBar)")
+            plt.xlabel("Volume/atom")
+            plt.legend()
+
+            plt.subplot(223)
+            gp300 = CubicSpline(ps_corrected_300K, gibbs_300K)
+            gp0   = CubicSpline(ps_corrected_0K,   gibbs_0K)
+            plt.plot(dft_ps, (gp300(dft_ps) - gibbs_300K_dft)*RY_TO_MEV, label="300 K")
+            plt.plot(dft_ps, (gp0(dft_ps)   - gibbs_0K_dft  )*RY_TO_MEV, label="0 K"  )
+            plt.xlabel("Pressure (KBar)")
+            plt.ylabel("Correction to \n Gibbs free energy/atom (meV)")
+            plt.legend()
+
+            plt.figure()
+
+    frel  = None
+    erel  = None
+    zrel  = None
+    orel  = None
+    pvrel = None
+
+    for direc, vs, es, zpe, occ, dft_ps, p300, p0, ss in corrected_data:
+        
+        pvs300  = KBAR_AU3_TO_RY*p300*vs
+        pvs0    = KBAR_AU3_TO_RY*p0*vs
+        g300    = es + zpe + occ + pvs300
+        g0      = es + zpe + pvs0
 
         label = direc
-        if "c2m"    in label : label =  "$C_2m$"
+        if "c2m"    in label : label = r"$C_2/m$"
         if "fm3m"   in label : label = r"$Fm\bar{3}m$" 
         if "r3m"    in label : label =  "$R3m$"
         if "p63mmc" in label : label =  "$P6_3/mmc$"
         if "cmcm"   in label : label =  "$cmcm$"
 
+        if erel is None: erel = CubicSpline(p300, es)
+        plt.subplot(511)
+        plt.plot(p300, (es-erel(p300))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("E (meV/atom")
+
+        if zrel is None: zrel = CubicSpline(p300, zpe)
+        plt.subplot(512)
+        plt.plot(p300, (zpe-zrel(p300))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("Z.P.E (meV/atom")
+
+        if orel is None: orel = CubicSpline(p300, occ)
+        plt.subplot(513)
+        plt.plot(p300, (occ-orel(p300))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("Phonon occupation energy (meV/atom")
+
+        if pvrel is None: pvrel = CubicSpline(p300, pvs300)
+        plt.subplot(514)
+        plt.plot(p300, (pvs300-pvrel(p300))*RY_TO_MEV)
+        plt.xlabel("Pressure (KBar)")
+        plt.ylabel("PV(meV/atom")
+
+        if frel is None: 
+            # Plot relative to cubic spline fit of first system
+            frel = CubicSpline(p300, g300)
+
         # Plot gibbs free energy at 300K
-        p = plt.plot(ps/10.0, (es - frel(ps) + de)*RY_TO_MEV, label=label)
+        plt.subplot(515)
+        p = plt.plot(p300/10.0, (g300 - frel(p300))*RY_TO_MEV, label=label)
         col = p[0].get_color()
 
         # Plot gibbs free energy at 0K
-        plt.plot(ps/10.0, (es - frel(ps))*RY_TO_MEV, linestyle=":", color=col)
-        plt.scatter(pss/10.0, (ess - frel(pss) + des)*RY_TO_MEV, color=col)
-        plt.scatter(psu/10.0, (esu - frel(psu) + deu)*RY_TO_MEV, marker="x", color=col)
+        #plt.plot(p0/10.0, (g0 - frel(p0))*RY_TO_MEV, linestyle=":", color=col)
+
+        # Label stable points
+        p300s = np.array( [p for p, s in zip(p300, ss) if s] )
+        g300s = np.array( [g for g, s in zip(g300, ss) if s] )
+        plt.scatter(p300s/10.0, (g300s - frel(p300s))*RY_TO_MEV, color=col)
+
+        p300u = np.array( [p for p, s in zip(p300, ss) if not s] )
+        g300u = np.array( [g for g, s in zip(g300, ss) if not s] )
+        plt.scatter(p300u/10.0, (g300u - frel(p300u))*RY_TO_MEV, color=col, marker="x")
 
     plt.xlabel("Pressure (GPa)")
     plt.ylabel("Gibbs free energy\n(meV/atom, relative)")

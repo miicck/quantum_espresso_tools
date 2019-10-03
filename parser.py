@@ -37,6 +37,10 @@ def parse_vc_relax(filename):
                                         data["atoms"].append([name, x, y, z])
                                 except:
                                         break
+                
+                # Parse the final total energy (i.e the scf energy)
+                if "total energy" in line and "!" in line:
+                        data["energy"] = float(line.split("=")[-1].split("r")[0])
 
                 # Parse enthalpy (in case final enthalpy is absent for some reason)
                 if "enthalpy new" in line:
