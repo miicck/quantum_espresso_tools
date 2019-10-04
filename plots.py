@@ -40,17 +40,37 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_c
         xtick_names = []
         for l in lines:
             if len(l.split()) == 0: continue
-            index, name = l.split()
+            index, name = l.split()[:2]
             xtick_vals.append(int(index))
             xtick_names.append(name)
 
     # Find discontinuities in the path
-    dc_pts = []
+    dc_pts    = []
+    to_remove = []
     for i in xtick_vals:
-        for j in xtick_vals:
+        for jindex, j in enumerate(xtick_vals):
             if j >= i: continue
             if abs(i-j) == 1:
-                dc_pts.append(i)
+                ni = xtick_names[xtick_vals.index(i)]
+                nj = xtick_names[xtick_vals.index(j)]
+                if ni != nj: dc_pts.append(i)
+                else: to_remove.append([jindex,j])
+
+    # Remove repeated q-points
+    to_remove.sort(key=lambda i:-i[1])
+    for i, iq in to_remove:
+        del qs[iq]
+        del all_ws[iq]
+
+        # Move labels to compenstate for change
+        for j in range(i, len(xtick_vals)):
+            xtick_vals[j] = xtick_vals[j] - 1
+
+    # Remove repeated labels
+    to_remove.sort(key=lambda i:-i[0])
+    for i, iq in to_remove:
+        del xtick_vals[i]
+        del xtick_names[i]
 
     # Attempt to sort out band crossings
     bands = np.array(all_ws)
