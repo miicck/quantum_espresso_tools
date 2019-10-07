@@ -566,6 +566,15 @@ def reduce_to_primitive(parameters):
         parameters["bz_path"]          = prim_geom["path"]
         parameters["high_symm_points"] = prim_geom["point_coords"]
 
+        # Convert k-points to cartesian coords in units of
+        # 2pi/a0, because that's what q.e uses for some reason
+        prim_lattice = parameters["lattice"]
+        a0 = np.linalg.norm(prim_lattice[0])
+        for p in parameters["high_symm_points"]:
+            frac_coords = parameters["high_symm_points"][p]
+            cart_coords = np.matmul(prim_lattice.T, frac_coords)
+            parameters["high_symm_points"][p] = 2*np.pi*cart_coords/a0
+
         outf = parameters["out_file"]
         outf.write("Successfully reduced to primitive geometry using seekpath.\n")
 
