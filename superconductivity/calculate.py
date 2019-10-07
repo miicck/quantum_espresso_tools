@@ -421,6 +421,7 @@ def create_ph_bands_in(parameters):
     t += "asr='simple',\n"
     t += "flfrc='force_constants',\n"
     t += "flfrq='ph_bands.freq',\n"
+    t += "q_in_cryst_coord=.true.,\n"
     t += "dos=.false.\n"
     if elph:
         t += "la2F=.true.,\n"
@@ -568,12 +569,12 @@ def reduce_to_primitive(parameters):
 
         # Convert k-points to cartesian coords in units of
         # 2pi/a0, because that's what q.e uses for some reason
-        prim_lattice = parameters["lattice"]
-        a0 = np.linalg.norm(prim_lattice[0])
-        for p in parameters["high_symm_points"]:
-            frac_coords = parameters["high_symm_points"][p]
-            cart_coords = np.matmul(prim_lattice.T, frac_coords)
-            parameters["high_symm_points"][p] = 2*np.pi*cart_coords/a0
+        #recip_prim_lattice = np.array(prim_geom["reciprocal_primitive_lattice"])
+        #a0 = np.linalg.norm(parameters["lattice"])
+        #for p in parameters["high_symm_points"]:
+        #    frac_coords = parameters["high_symm_points"][p]
+        #    cart_coords = np.matmul(recip_prim_lattice.T, frac_coords)
+        #    parameters["high_symm_points"][p] = cart_coords*a0/(2*np.pi)
 
         outf = parameters["out_file"]
         outf.write("Successfully reduced to primitive geometry using seekpath.\n")
