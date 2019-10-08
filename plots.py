@@ -174,7 +174,6 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
 
             # Normalize dos to # of phonon states
             dos = 3*nat*dos/np.trapz(dos, x=omegas)
-            plt.plot(omegas, dos, label="{0} KBar".format(pressure))
 
             # Calculate zero-point energy
             wd = [[w,d] for w,d in zip(omegas, dos) if w > 0]
@@ -198,9 +197,6 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
 
             # Save data
             data.append([volume, f0, f300, pressure, enthalpy, energy, stable])
-
-        plt.legend()
-        plt.show()
 
         if len(data) == 0:
             print("No data for "+direc)
@@ -229,16 +225,29 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         f300_fit  = [i for i,j in zip(f300,s)  if j or use_unstable]
         p_dft_fit = [i for i,j in zip(p_dft,s) if j or use_unstable] 
 
+        label = direc
+        if  "fm3m"  in label: label = r"$Fm\bar{3}m$"
+        elif "c2m"  in label: label = r"$C_2/m$"
+        elif "p63"  in label: label = r"$P6_3/mmc$"
+        elif "cmcm" in label: label = r"$Cmcm$"
+
         plt.subplot(222)
         e_model, p_model, par, cov = fit_birch_murnaghan(v_fit, f300_fit, p_guess=p_dft_fit)
         p300 = p_model(v)
         g300 = f300 + p300*v*KBAR_AU3_TO_RY
         if grel300 is None: grel300 = CubicSpline(p300, g300)
-        p = plt.plot(p300, (g300-grel300(p300))*RY_TO_MEV)
+        p = plt.plot(p300, (g300-grel300(p300))*RY_TO_MEV, label=label)
+        plt.legend()
         col = p[0].get_color()
+
         gs = [i for i,j in zip(g300, s) if j]
         ps = [i for i,j in zip(p300, s) if j]
         plt.scatter(ps, (gs-grel300(ps))*RY_TO_MEV, color=col)
+
+        gu = [i for i,j in zip(g300, s) if not j]
+        pu = [i for i,j in zip(p300, s) if not j]
+        plt.scatter(pu, (gu-grel300(pu))*RY_TO_MEV, color=col, marker="x")
+
         e_model, p_model, par, cov = fit_birch_murnaghan(v_fit, f0_fit, p_guess=p_dft_fit)
         p0   = p_model(v)
         g0   = f0 + p0*v*KBAR_AU3_TO_RY

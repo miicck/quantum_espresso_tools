@@ -65,6 +65,7 @@ def fit_eos(vdata, edata, eos_e, eos_p, p_guess=None):
             print(ex)
             to_min = lambda p : np.linalg.norm(eos_e(vdata, *p) - edata)
             par = minimize(to_min, x0=p0).x
+            cov = 0
 
         except:
             print("Failed to fit EOS to plot shown!")
