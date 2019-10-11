@@ -600,6 +600,9 @@ def reduce_to_primitive(parameters):
         parameters["qpoint_grid"] = get_kpoint_grid(
             parameters["lattice"], parameters["qpoint_spacing"])
 
+    # Ensure we have at least 1 q-point in each direction
+    parameters["qpoint_grid"] = [max(1,q) for q in parameters["qpoint_grid"]]
+
     # Work out k-point grid from q-point grid and
     # k-points per qpoint
     kpq = parameters["kpts_per_qpt"]
