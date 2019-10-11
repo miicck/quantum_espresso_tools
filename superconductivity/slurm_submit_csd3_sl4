@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -J elec_phon
-#SBATCH -A NEEDS-SL2-CPU
+#SBATCH -A NEEDS-SL4-CPU
 #SBATCH --nodes={nodes}
 #SBATCH --ntasks={cores_total}
 #SBATCH --time=12:00:00
