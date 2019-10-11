@@ -131,13 +131,21 @@ def read_parameters(filename):
 
         # Parse primary/aux k-point grid
         elif key == "kpts_per_qpt":
-            ret[key] = [int(k) for k in l.split()[1:4]]
+            grid = [int(k) for k in l.split()[1:]]
+            if   len(grid) == 3: ret[key] = grid
+            elif len(grid) == 1: ret[key] = [grid[0], grid[0], grid[0]]
+            else: raise Exception("Could not parse kpts_per_qpts from : "+l)
             continue
 
         # Parse primary/aux k-point grid
         elif key == "aux_kpts":
-            try:    ret[key] = [int(k) for k in l.split()[1:4]]
-            except: ret[key] = None # No auxillary grid
+            try:    
+                grid = [int(k) for k in l.split()[1:4]]
+                if   len(grid) == 3: ret[key] = grid
+                elif len(grid) == 1: ret[key] = [grid[0], grid[0], grid[0]]
+                else: raise Exception("Could not parse aux_kpts from : "+l)
+            except: 
+                ret[key] = None # No auxillary grid
             continue
                         
         # Parse key-value pairs from the input file
