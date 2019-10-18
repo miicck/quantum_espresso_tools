@@ -68,9 +68,11 @@ def read_parameters(filename):
     for i, l in enumerate(lines):
         
         l = l.strip()
-        if i in i_ignored: continue
-        if l.startswith("#"): continue
-        if len(l) == 0: continue
+        if i in i_ignored:    continue # Skip lines that have been dealt with
+        if l.startswith("#"): continue # Ignore comment lines
+        if len(l) == 0:       continue # Ignore empty lines
+        if l.find("#") >= 0:
+            l = l[0:l.find("#")]  # strip comments
         key = l.split()[0]
 
         # Parse the lattice from the input file
