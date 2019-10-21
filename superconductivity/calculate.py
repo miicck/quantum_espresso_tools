@@ -5,6 +5,10 @@ import numpy.linalg as la
 import os
 import subprocess
 
+# Conversion factors
+ANGSTROM_TO_BOHR = 1.88973
+BOHR_TO_ANGSTROM = 0.529177
+
 def default_parameters():
 
     # Default pseudopotential directory is home/pseudopotentials
@@ -75,10 +79,20 @@ def read_parameters(filename):
 
         # Parse the lattice from the input file
         if key == "lattice":
+
+            # Convert units to angstrom
+            units = l.split()[1]
+            if units == "angstrom":
+                factor = 1.0
+            elif units == "bohr":
+                factor = BOHR_TO_ANGSTROM
+            else:
+                raise ValueError("Unkown lattice units: "+units)
+
             lattice = []
             for j in range(i+1, i+4):
                     i_ignored.append(j)
-                    lattice.append([float(w) for w in lines[j].split()])
+                    lattice.append([factor*float(w) for w in lines[j].split()])
             ret["lattice"] = lattice
             continue
 
@@ -88,10 +102,15 @@ def read_parameters(filename):
             units = l.split()[2]
 
             # Calculate transformation to fractional coordinates
+            # from given system of units. This is done by constructing
+            # the matrix that transforms from the given units to 
+            # crystal coords: the inverse lattice transpose linv.
             if units == "crystal" or units == "fractional":
                 linv = np.identity(3)
             elif units == "angstrom":
                 linv = la.inv(np.array(ret["lattice"]).T)
+            elif units == "bohr":
+                linv = la.inv(ANGSTROM_TO_BOHR*np.array(ret["lattice"]).T)
             else:
                 raise ValueError("Unkown atom coordinate units: "+units)
             

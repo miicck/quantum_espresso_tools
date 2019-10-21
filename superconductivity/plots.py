@@ -186,6 +186,9 @@ def plot_tc_vs_p_aux_primary(
             print("Less than 2 k-point grids found in "+pdir+", skipping...")
             continue
 
+        if len(grids_data[0]["tc1"]) != len(grids_data[1]["tc1"]):
+            raise Exception("Mismatched grid sizes in "+pdir)
+
         # Evaluate the difference in Tc(sigma) between
         # the two grids and use this to work out what the
         # best smearing value is
