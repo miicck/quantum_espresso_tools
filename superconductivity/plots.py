@@ -332,6 +332,7 @@ def plot_tc_vs_p(direc,
         # Check if the structure is unstable
         unstable = lines[10].split("#")[0].strip() == "True"
         if unstable and (not plot_unstable): 
+            print(direc+"/"+pdir, "unstable")
             continue
 
         # Read in mus and corresponding tcs

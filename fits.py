@@ -45,11 +45,11 @@ def fit_eos(vdata, edata, eos_e, eos_p, p_guess=None):
             p0[1:]    = par
 
         except Exception as ex:
-            print("Could not EOS to plotted pressure data!")
+            print("Could not fit EOS to plotted pressure data!")
             print(ex)
-            plt.plot(vdata, p_fit)
-            plt.plot(vdata, eos_p(vdata, *p0p))
-            plt.show()
+            #plt.plot(vdata, p_fit)
+            #plt.plot(vdata, eos_p(vdata, *p0p))
+            #plt.show()
 
     try:
         # Try to fit EOS to the given E(v) data 

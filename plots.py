@@ -207,17 +207,17 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         all_data.append([direc, data])
 
     grel300 = None
-    hrel    = None
-    greldft    = None
+    hrel      = None
+    greldft   = None
+    fig, axes = plt.subplots(2,2)
 
     for direc, data in all_data:
         v, f0, f300, p_dft, h_dft, e_dft, s = np.array(data).T
 
         if hrel is None: hrel = CubicSpline(p_dft, h_dft)
-        plt.subplot(221)
-        plt.plot(p_dft, (h_dft-hrel(p_dft))*RY_TO_MEV)
-        plt.xlabel(r"$P_{DFT}$ (KBar)")
-        plt.ylabel(r"Enthalpy (meV/atom)")
+        axes[0,0].plot(p_dft, (h_dft-hrel(p_dft))*RY_TO_MEV)
+        axes[0,0].set_xlabel(r"$P_{DFT}$ (KBar)")
+        axes[0,0].set_ylabel(r"Enthalpy (meV/atom)")
 
         use_unstable = True
         v_fit     = [i for i,j in zip(v,   s)  if j or use_unstable]
@@ -231,36 +231,34 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         elif "p63"  in label: label = r"$P6_3/mmc$"
         elif "cmcm" in label: label = r"$Cmcm$"
 
-        plt.subplot(222)
         e_model, p_model, par, cov = fit_birch_murnaghan(v_fit, f300_fit, p_guess=p_dft_fit)
         p300 = p_model(v)
         g300 = f300 + p300*v*KBAR_AU3_TO_RY
         if grel300 is None: grel300 = CubicSpline(p300, g300)
-        p = plt.plot(p300, (g300-grel300(p300))*RY_TO_MEV, label=label)
+        p = axes[0,1].plot(p300, (g300-grel300(p300))*RY_TO_MEV, label=label)
         plt.legend()
         col = p[0].get_color()
 
         gs = [i for i,j in zip(g300, s) if j]
         ps = [i for i,j in zip(p300, s) if j]
-        plt.scatter(ps, (gs-grel300(ps))*RY_TO_MEV, color=col)
+        axes[0,1].scatter(ps, (gs-grel300(ps))*RY_TO_MEV, color=col)
 
         gu = [i for i,j in zip(g300, s) if not j]
         pu = [i for i,j in zip(p300, s) if not j]
-        plt.scatter(pu, (gu-grel300(pu))*RY_TO_MEV, color=col, marker="x")
+        axes[0,1].scatter(pu, (gu-grel300(pu))*RY_TO_MEV, color=col, marker="x")
 
         e_model, p_model, par, cov = fit_birch_murnaghan(v_fit, f0_fit, p_guess=p_dft_fit)
         p0   = p_model(v)
         g0   = f0 + p0*v*KBAR_AU3_TO_RY
-        plt.plot(p0, (g0-grel300(p0))*RY_TO_MEV, linestyle=":", color=col)
-        plt.xlabel(r"$P$ (KBar)")
-        plt.ylabel(r"Gibbs free energy (meV/atom)")
+        axes[0,1].plot(p0, (g0-grel300(p0))*RY_TO_MEV, linestyle=":", color=col)
+        axes[0,1].set_xlabel(r"$P$ (KBar)")
+        axes[0,1].set_ylabel(r"Gibbs free energy (meV/atom)")
 
-        plt.subplot(223)
         g_dft300 = f300 + p_dft*v*KBAR_AU3_TO_RY
         if greldft is None: greldft = CubicSpline(p_dft, g_dft300)
-        plt.plot(p_dft, (g_dft300-greldft(p_dft))*RY_TO_MEV)
-        plt.xlabel(r"$P_{DFT}$ (KBar)")
-        plt.ylabel(r"Gibbs free energy (DFT, meV/atom)")
+        axes[1,0].plot(p_dft, (g_dft300-greldft(p_dft))*RY_TO_MEV)
+        axes[1,0].set_xlabel(r"$P_{DFT}$ (KBar)")
+        axes[1,0].set_ylabel(r"Gibbs free energy (DFT, meV/atom)")
 
     plt.show()
 
