@@ -206,9 +206,10 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         data.sort(key=lambda d:1/d[0])
         all_data.append([direc, data])
 
-    grel300 = None
+    grel300   = None
     hrel      = None
     greldft   = None
+    ereldft   = None
     fig, axes = plt.subplots(2,2)
 
     for direc, data in all_data:
@@ -259,6 +260,11 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         axes[1,0].plot(p_dft, (g_dft300-greldft(p_dft))*RY_TO_MEV)
         axes[1,0].set_xlabel(r"$P_{DFT}$ (KBar)")
         axes[1,0].set_ylabel(r"Gibbs free energy (DFT, meV/atom)")
+
+        if ereldft is None: ereldft = CubicSpline(p_dft, e_dft)
+        axes[1,1].plot(p_dft, (e_dft-ereldft(p_dft))*RY_TO_MEV)
+        axes[1,1].set_xlabel(r"$P_{DFT}$ (KBar)")
+        axes[1,1].set_ylabel(r"$E_{DFT}$ (meV/atom)")
 
     plt.show()
 

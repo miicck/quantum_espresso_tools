@@ -9,7 +9,7 @@ def convert_common_labels(label):
     if "fm3m" in label: return r"$Fm\bar{3}m$"
     if "p63mmc" in label: return "$P6_3/mmc$"
     if "cmcm" in label: return "$cmcm$"
-    if "r3m" in label: return "$R3m$"
+    if "r3m" in label: return r"$R\bar{3}m$"
     return label
 
 def plot_tc_vs_smearing(directories):
