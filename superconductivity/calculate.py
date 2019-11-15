@@ -386,7 +386,11 @@ def create_bands_in(parameters):
     with open("bands.in","w") as f:
         f.write(t)
 
-def create_elph_in(parameters):
+def create_elph_in(
+    name, 
+    parameters, 
+    q_range=None,
+    irr_range=None):
 
     elph = parameters["elph"]
 
@@ -403,6 +407,14 @@ def create_elph_in(parameters):
     t += "nq1={0},\n".format(parameters["qpoint_grid"][0])
     t += "nq2={0},\n".format(parameters["qpoint_grid"][1])
     t += "nq3={0},\n".format(parameters["qpoint_grid"][2])
+    if not q_range is None:
+        # Specify a range of q-points to calculate
+        t += "start_q={0},\n".format(q_range[0])
+        t += "last_q={0},\n".format(q_range[1])
+    if not irr_range is None:
+        # Specify a range of irreps to calculate
+        t += "start_irr={0},\n".format(irr_range[0])
+        t += "last_irr={0},\n".format(irr_range[1])
     if elph:
         # Parameters for electron-phonon calculation
         t += "fildvscf='elph_vscf',\n"
@@ -418,7 +430,7 @@ def create_elph_in(parameters):
     t += "/\n"
 
     # Write the file
-    with open("elph.in","w") as f:
+    with open(name+".in","w") as f:
         f.write(t)
 
 def create_q2r_in(parameters):
@@ -510,7 +522,7 @@ def create_bands_x_in(parameters):
     f.write(t)
     f.close()
 
-def run_qe(exe, file_prefix, parameters, dry=False):
+def run_qe(exe, file_prefix, parameters, dry=False, check_done=True):
 
     if dry: return
 
@@ -550,11 +562,12 @@ def run_qe(exe, file_prefix, parameters, dry=False):
     os.system(cmd)
 
     # Check calculation completed properly
-    with open(file_prefix+".out") as f:
-        if not "JOB DONE" in f.read():
-            err = "JOB DONE not found in {0}.out".format(file_prefix)
-            parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
-            raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
+    if check_done:
+        with open(file_prefix+".out") as f:
+            if not "JOB DONE" in f.read():
+                err = "JOB DONE not found in {0}.out".format(file_prefix)
+                parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
+                raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
 
 def reduce_to_primitive(parameters):
 
@@ -672,11 +685,37 @@ def run(parameters, dry=False, aux_kpts=False):
     create_scf_in(parameters)
     run_qe("pw.x", "scf", parameters, dry=dry)
 
-    # Run elec-phonon calculation
-    create_elph_in(parameters)
-    run_qe("ph.x", "elph", parameters, dry=dry)
-    if parameters["disk_usage"] == "minimal":
-        os.system("rm -r _ph0")
+    # Run elec-phonon prep calculation
+    create_elph_in("elph_prep", parameters, irr_range=[0,0])
+    run_qe("ph.x", "elph_prep", parameters, dry=dry)
+
+    # Count representations/q-points
+    irrep_count = 0  
+    qpoint_count = 0
+    with open("elph_prep.out") as elph_prep_f:
+        for line in elph_prep_f:
+            if "q-points for this run" in line:
+                qpoint_count = int(line.split("/")[1].split()[0])
+            if "Representation" in line:
+                irrep_count += 1
+    parameters["out_file"].write("Found {0} irreducible representations".format(irrep_count))
+
+    # Run elec-phonon calculations for each irrep
+    for q_point in range(1, qpoint_count+1):
+        for irr in range(1, irrep_count+1):
+            name = "elph_{0}_{1}".format(q_point, irr)
+            create_elph_in(name, parameters,
+                irr_range=[irr, irr+1], 
+                q_range=[q_point, q_point+1])
+            run_qe("ph.x", name, parameters, dry=dry)
+
+    # Collect phonon results/diagonalise dynamical matrix
+    create_elph_in("elph_collect", parameters)
+    run_qe("ph.x", "elph_collect", parameters, dry=dry)
+    return
+
+    #if parameters["disk_usage"] == "minimal":
+    #    os.system("rm -r _ph0")
 
     # Convert dynamcial matricies etc to real space
     create_q2r_in(parameters)
