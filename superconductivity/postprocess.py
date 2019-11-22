@@ -16,7 +16,7 @@ def gap_model(t, tc, gmax):
 
 # Get superconductivity info from eliashhberg function
 # we ignore the portion of a2f where w < 0 (if there is such a region)
-def get_tc_info(omega, a2f, mu, plot_fit=False):
+def get_tc_info(omega, a2f, mu, plot_fit=False, plot_errors=False, outf=None):
 
     # Use elk to solve the eliashberg equations
     # carry out caclulation in temporary directory
@@ -45,7 +45,8 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
     elkin.close()
 
     # Run elk
-    print("Solving eliashberg equations with mu = {0} ...".format(mu))
+    if not outf is None:
+        outf.write("Solving eliashberg equations with mu = {0} ...\n".format(mu))
     os.system("cd tmp_elk; elk > /dev/null")
 
     # Read superconducting gap vs temperature from output
@@ -91,31 +92,37 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
 
     # Fit to model to extract Tc from gap equations
     if tc_guess < 1.0: tc_guess = tc_ad
-    p0 = [tc_guess, max(gaps)] # Initial param guess from A-D
+    p0 = [tc_guess, max(gaps)] 
     try:
         par, cov = curve_fit(gap_model, ts, gaps, p0)
 
     except Warning as warn:
-        print("Fit failed with waring:")
-        print(warn)
+        if not outf is None:
+            outf.write("Fit failed with waring:\n")
+            outf.write(str(warn)+"\n")
 
-        import matplotlib.pyplot as plt
-        plt.plot(ts, gaps)
-        plt.show()
-
-        par = [0]
-        cov = np.inf
-
-    except RuntimeError as err:
-        print("Fit failed with errror:")
-        print(err)
-
-        import matplotlib.pyplot as plt
-        plt.plot(ts, gaps)
-        plt.show()
+        if plot_errors:
+            import matplotlib.pyplot as plt
+            plt.plot(ts, gaps)
+            plt.axvline(tc_guess, label="Guess")
+            plt.legend()
+            plt.show()
 
         par = [0]
         cov = np.inf
+
+    except Exception as err:
+        outf.write("Fit failed with errror:\n")
+        outf.write(err+"\n")
+
+        if plot_errors:
+            import matplotlib.pyplot as plt
+            plt.plot(ts, gaps)
+            plt.axvline(tc_guess, label="Guess")
+            plt.legend()
+            plt.show()
+
+        raise err
 
     if plot_fit:
         import matplotlib.pyplot as plt
@@ -129,20 +136,20 @@ def get_tc_info(omega, a2f, mu, plot_fit=False):
         tc  = par[0]
         err = cov[0][0]**0.5
     else:
-        print("Covariance is infinite!")
+        outf.write("Covariance is infinite!\n")
         tc  = tc_guess
         err = np.inf
 
-    print("Tc = {0} +/- {1} (Eliashberg)".format(tc, err))
-    print("Mcmillan params")
-    print("    Tc        {0} K".format(tc_ad))
-    print("    Lambda    {0}".format(lam))
-    print("    Wlog      {0} Ry".format(wlog))
-    print("    Wrms      {0} Ry".format(wrms))
-    print("    Wlog/Wrms {0}".format(wlog/wrms))
+    outf.write("Tc = {0} +/- {1} (Eliashberg)\n".format(tc, err))
+    outf.write("Mcmillan params      \n")
+    outf.write("    Tc        {0} K  \n".format(tc_ad))
+    outf.write("    Lambda    {0}    \n".format(lam))
+    outf.write("    Wlog      {0} Ry \n".format(wlog))
+    outf.write("    Wrms      {0} Ry \n".format(wrms))
+    outf.write("    Wlog/Wrms {0}    \n".format(wlog/wrms))
 
     # Remove temporary directory
-    #os.system("rm -r tmp_elk")
+    os.system("rm -r tmp_elk")
 
     return [tc, lam, wlog, tc_ad]
 
@@ -158,42 +165,75 @@ def listfiles(folder):
 # info
 def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
 
+    # Open the output and error files
+    outf = open(base_dir+"/postprocess_out","w",1) 
+    errf = open(base_dir+"/postprocess_errors","w",1)
+
+    # Loop over all files in base_dir or subdirectories
     for f in listfiles(base_dir):
 
+        # Find a2f.dos{n} files
         if not "a2f.dos" in f.lower(): continue
-        if f.endswith(".tc"): continue
-        print("\n")
+        if f.endswith(".tc"): continue # Not already processed
 
+        outf.write("\n")
+
+        # Dont overwrite unless instructed to do so
         ftc = f+".tc"
         if os.path.isfile(ftc) and (not overwrite):
-            print("Refusing to overwrite "+ftc)
+            outf.write("Refusing to overwrite "+ftc+"\n")
             continue
 
+        # Find the directory that this a2f file is in
         d = "/".join(f.split("/")[0:-1])
 
-        print("Parsing a2F for "+f)
-        omega, a2f, a2fnn, a2fp = parser.parse_a2f(f)
-        dynamically_unstable = False
-        for w, a in zip(omega, a2f):
-            if w > -10e-10: continue
-            if a <  10e-10: continue
-            dynamically_unstable = True
-            print("Dynamically unstable")
-            break
+        # Attempt to calculate Tc for this a2F
+        try:
+            # Parse a2F
+            outf.write("Parsing a2F for "+f+"\n")
+            omega, a2f, a2fnn, a2fp = parser.parse_a2f(f)
+            dynamically_unstable = False
+            for w, a in zip(omega, a2f):
+                if w > -10e-10: continue
+                if a <  10e-10: continue
+                dynamically_unstable = True
+                outf.write("Dynamically unstable\n")
+                break
 
-        print("Getting T_c for "+f)
-        w = open(ftc,"w")
+            # Solve eliashberg equations using elk for
+            # mu* = 0.1 and mu* = 0.15
+            outf.write("Getting T_c for "+f+"\n")
+            w = open(ftc,"w")
 
-        tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.1, plot_fit=plot_fits)
-        w.write("mu = 0.1\n")
-        fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
-        w.write(fs.format(tc,tc_ad,lam,wlog))
+            tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.1, 
+                plot_fit=plot_fits, outf=outf)
 
-        tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.15, plot_fit=plot_fits)
-        w.write("mu = 0.15\n")
-        fs = "{0} # Tc (Eliashberg)\n{1} # Tc (Allen-Dynes)\n{2} # Lambda\n{3} # <w>\n"
-        w.write(fs.format(tc,tc_ad,lam,wlog))
-        fs = "{0} # Dynamically unstable? If true, we have ignored imaginary modes to obtain Tc\n"
-        w.write(fs.format(dynamically_unstable))
+            w.write("mu = 0.1\n")
+            fs  = "{0} # Tc (Eliashberg)\n"
+            fs += "{1} # Tc (Allen-Dynes)\n"
+            fs += "{2} # Lambda\n{3} # <w>\n"
+            w.write(fs.format(tc,tc_ad,lam,wlog))
 
-        w.close()
+            tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.15, 
+                plot_fit=plot_fits, outf=outf)
+
+            w.write("mu = 0.15\n")
+            fs =  "{0} # Tc (Eliashberg)\n"
+            fs += "{1} # Tc (Allen-Dynes)\n"
+            fs += "{2} # Lambda\n{3} # <w>\n"
+            w.write(fs.format(tc,tc_ad,lam,wlog))
+            fs =  "{0} # Dynamically unstable?"
+            fs += "If true, we have ignored imaginary modes to obtain Tc\n"
+            w.write(fs.format(dynamically_unstable))
+
+            w.close()
+
+        except Exception as e:
+
+            # Log errors
+            errf.write("Error while processing {0}:\n".format(f))
+            errf.write(str(e)+"\n")
+
+    # Close output files
+    outf.close()
+    errf.close()
