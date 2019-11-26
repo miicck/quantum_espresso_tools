@@ -4,6 +4,7 @@ from quantum_espresso_tools import parser
 from scipy.optimize import curve_fit
 import numpy as np
 import warnings
+import traceback
 warnings.filterwarnings("error")
 
 RY_TO_K = 157887.6633481157
@@ -28,12 +29,11 @@ def get_tc_info(omega, a2f, mu, plot_fit=False, plot_errors=False, outf=None):
     os.system("mkdir tmp_elk 2>/dev/null")
 
     # Create a2F file
-    a2fin = open("tmp_elk/ALPHA2F.OUT", "w")
     wa    = [[w, a] for w, a in zip(omega, a2f) if w > 0]
-    for w, a in wa:
-        w *= 0.5 # Convert Ry to Ha
-        a2fin.write("{0} {1}\n".format(w,a))
-    a2fin.close()
+    with open("tmp_elk/ALPHA2F.OUT", "w") as a2fin:
+        for w, a in wa:
+            w *= 0.5 # Convert Ry to Ha
+            a2fin.write("{0} {1}\n".format(w,a))
 
     # Create elk input file
     elkin = open("tmp_elk/elk.in", "w")
@@ -187,6 +187,8 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
         # Find the directory that this a2f file is in
         d = "/".join(f.split("/")[0:-1])
 
+        # Parse the 
+
         # Attempt to calculate Tc for this a2F
         try:
             # Parse a2F
@@ -200,39 +202,41 @@ def process_all_a2f(base_dir, overwrite=False, plot_fits=False):
                 outf.write("Dynamically unstable\n")
                 break
 
+            # Renormalize a2fnn
+            a2fnn *= np.trapz(a2f) / np.trapz(a2fnn)
+
             # Solve eliashberg equations using elk for
             # mu* = 0.1 and mu* = 0.15
             outf.write("Getting T_c for "+f+"\n")
-            w = open(ftc,"w")
+            with open(ftc,"w") as w:
 
-            tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.1, 
-                plot_fit=plot_fits, outf=outf)
+                tc, lam, wlog, tc_ad = get_tc_info(omega, a2fnn, 0.1, 
+                    plot_fit=plot_fits, outf=outf)
 
-            w.write("mu = 0.1\n")
-            fs  = "{0} # Tc (Eliashberg)\n"
-            fs += "{1} # Tc (Allen-Dynes)\n"
-            fs += "{2} # Lambda\n{3} # <w>\n"
-            w.write(fs.format(tc,tc_ad,lam,wlog))
+                w.write("mu = 0.1\n")
+                fs  = "{0} # Tc (Eliashberg)\n"
+                fs += "{1} # Tc (Allen-Dynes)\n"
+                fs += "{2} # Lambda\n{3} # <w>\n"
+                w.write(fs.format(tc,tc_ad,lam,wlog))
 
-            tc, lam, wlog, tc_ad = get_tc_info(omega, a2f, 0.15, 
-                plot_fit=plot_fits, outf=outf)
+                tc, lam, wlog, tc_ad = get_tc_info(omega, a2fnn, 0.15, 
+                    plot_fit=plot_fits, outf=outf)
 
-            w.write("mu = 0.15\n")
-            fs =  "{0} # Tc (Eliashberg)\n"
-            fs += "{1} # Tc (Allen-Dynes)\n"
-            fs += "{2} # Lambda\n{3} # <w>\n"
-            w.write(fs.format(tc,tc_ad,lam,wlog))
-            fs =  "{0} # Dynamically unstable?"
-            fs += "If true, we have ignored imaginary modes to obtain Tc\n"
-            w.write(fs.format(dynamically_unstable))
-
-            w.close()
+                w.write("mu = 0.15\n")
+                fs =  "{0} # Tc (Eliashberg)\n"
+                fs += "{1} # Tc (Allen-Dynes)\n"
+                fs += "{2} # Lambda\n{3} # <w>\n"
+                w.write(fs.format(tc,tc_ad,lam,wlog))
+                fs =  "{0} # Dynamically unstable?"
+                fs += "If true, we have ignored imaginary modes to obtain Tc\n"
+                w.write(fs.format(dynamically_unstable))
 
         except Exception as e:
 
             # Log errors
             errf.write("Error while processing {0}:\n".format(f))
             errf.write(str(e)+"\n")
+            errf.write(traceback.format_exc())
 
     # Close output files
     outf.close()
