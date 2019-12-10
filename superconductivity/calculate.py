@@ -25,34 +25,35 @@ def default_parameters():
         cores = 1
 
     return {
-    "nodes"          : 1,          # Number of compute nodes to use
-    "cores_per_node" : cores,      # Number of cores per compute node
-    "mpirun"         : "mpirun",   # Mpi caller (i.e mpirun or aprun)
-    "elph"           : True,       # True if we are to calculate electron-phonon coupling
-    "pressure"       : 0,          # Pressure in GPa
-    "press_conv_thr" : 0.5,        # Pressure convergence threshold
-    "ecutwfc"        : 30,         # Plane wave cutoff in Ry
-    "ecutrho"        : 300,        # Density cutoff in Ry
-    "qpoint_spacing" : 0.2,        # Q-point grid spacing in A^-1
-    "kpts_per_qpt"   : [8, 8, 8],  # K-point grid (as multiple of q-point grid)
-    "aux_kpts"       : [6, 6, 6],  # Auxilliary k-point grid (as multiple of q-point grid)
-    "qpt_dense_mult" : 10,         # Ratio of dense (interpolated) qpt grid to coarse q_point_grid
-    "ph_ndos"        : 500,        # Number of points at which to calculate phonon DOS
-    "band_kpts"      : 100,        # Points along the bandstructure
-    "pseudo_dir"     : "./",       # Pseudopotential directory
-    "forc_conv_thr"  : 1e-5,       # Force convergence threshold
-    "degauss"        : 0.02,       # Smearing width in Ry
-    "mixing_beta"    : 0.7,        # Electronic mixing
-    "conv_thr"       : 1e-8,       # Electron energy convergence thresh (Ry)
-    "symm_tol_cart"  : 0.001,      # Symmetry tolerance for frac coords
-    "symm_tol_angle" : 0.5,        # Symmetry tolerance for angles (degrees)
-    "elph_nsig"      : 10,         # Number of smearing witdths to use
-    "elph_dsig"      : 0.01,       # Spacing of smearing widths (Ry)
-    "disk_usage"     : "normal",   # Set to 'minimal' to delete unnessacary files
-    "pseudo_dir"     : pseudo_dir, # Where the pseudopotentials for this run are
-    "lattice"        : 2.15*np.identity(3),               # Crystal lattice in angstrom
-    "species"        : [["Li", 7.0, "Li.UPF"]],           # Species of atom/mass/pseudo
-    "atoms"          : [["Li",0,0,0],["Li",0.5,0.5,0.5]], # Atom names and x,y,z coords
+    "nodes"            : 1,          # Number of compute nodes to use
+    "cores_per_node"   : cores,      # Number of cores per compute node
+    "mpirun"           : "mpirun",   # Mpi caller (i.e mpirun or aprun)
+    "elph"             : True,       # True if we are to calculate electron-phonon coupling
+    "pressure"         : 0,          # Pressure in GPa
+    "press_conv_thr"   : 0.5,        # Pressure convergence threshold
+    "ecutwfc"          : 30,         # Plane wave cutoff in Ry
+    "ecutrho"          : 300,        # Density cutoff in Ry
+    "qpoint_spacing"   : 0.2,        # Q-point grid spacing in A^-1
+    "kpts_per_qpt"     : [8, 8, 8],  # K-point grid (as multiple of q-point grid)
+    "aux_kpts"         : [6, 6, 6],  # Auxilliary k-point grid (as multiple of q-point grid)
+    "qpt_dense_mult"   : 10,         # Ratio of dense (interpolated) qpt grid to coarse q_point_grid
+    "ph_ndos"          : 500,        # Number of points at which to calculate phonon DOS
+    "band_kpts"        : 100,        # Points along the bandstructure
+    "pseudo_dir"       : "./",       # Pseudopotential directory
+    "forc_conv_thr"    : 1e-5,       # Force convergence threshold
+    "degauss"          : 0.02,       # Smearing width in Ry
+    "mixing_beta"      : 0.7,        # Electronic mixing
+    "conv_thr"         : 1e-8,       # Electron energy convergence thresh (Ry)
+    "symm_tol_cart"    : 0.001,      # Symmetry tolerance for frac coords
+    "symm_tol_angle"   : 0.5,        # Symmetry tolerance for angles (degrees)
+    "elph_nsig"        : 10,         # Number of smearing witdths to use
+    "elph_dsig"        : 0.01,       # Spacing of smearing widths (Ry)
+    "disk_usage"       : "normal",   # Set to 'minimal' to delete unnessacary files
+    "pseudo_dir"       : pseudo_dir, # Where the pseudopotentials for this run are
+    "irrep_group_size" : 0,          # The number of irreps processed in each el-ph step (0 => all)
+    "lattice"          : 2.15*np.identity(3),               # Crystal lattice in angstrom
+    "species"          : [["Li", 7.0, "Li.UPF"]],           # Species of atom/mass/pseudo
+    "atoms"            : [["Li",0,0,0],["Li",0.5,0.5,0.5]], # Atom names and x,y,z coords
     }
 
 def read_parameters(filename):
@@ -386,7 +387,12 @@ def create_bands_in(parameters):
     with open("bands.in","w") as f:
         f.write(t)
 
-def create_elph_in(parameters):
+def create_elph_in(
+    name, 
+    parameters, 
+    q_range=None,
+    irr_range=None,
+    force_recover=False):
 
     elph = parameters["elph"]
 
@@ -403,6 +409,14 @@ def create_elph_in(parameters):
     t += "nq1={0},\n".format(parameters["qpoint_grid"][0])
     t += "nq2={0},\n".format(parameters["qpoint_grid"][1])
     t += "nq3={0},\n".format(parameters["qpoint_grid"][2])
+    if not q_range is None:
+        # Specify a range of q-points to calculate
+        t += "start_q={0},\n".format(q_range[0])
+        t += "last_q={0},\n".format(q_range[1])
+    if not irr_range is None:
+        # Specify a range of irreps to calculate
+        t += "start_irr={0},\n".format(irr_range[0])
+        t += "last_irr={0},\n".format(irr_range[1])
     if elph:
         # Parameters for electron-phonon calculation
         t += "fildvscf='elph_vscf',\n"
@@ -412,13 +426,13 @@ def create_elph_in(parameters):
 
     # Check if calculation was already underway
     # if so, make this a continuation run
-    if os.path.isfile("elph.out"):
+    if force_recover or os.path.isfile("elph.out"):
         t += "recover=.true.,\n"
 
     t += "/\n"
 
     # Write the file
-    with open("elph.in","w") as f:
+    with open(name+".in","w") as f:
         f.write(t)
 
 def create_q2r_in(parameters):
@@ -510,7 +524,7 @@ def create_bands_x_in(parameters):
     f.write(t)
     f.close()
 
-def run_qe(exe, file_prefix, parameters, dry=False):
+def run_qe(exe, file_prefix, parameters, dry=False, check_done=True):
 
     if dry: return
 
@@ -550,11 +564,12 @@ def run_qe(exe, file_prefix, parameters, dry=False):
     os.system(cmd)
 
     # Check calculation completed properly
-    with open(file_prefix+".out") as f:
-        if not "JOB DONE" in f.read():
-            err = "JOB DONE not found in {0}.out".format(file_prefix)
-            parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
-            raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
+    if check_done:
+        with open(file_prefix+".out") as f:
+            if not "JOB DONE" in f.read():
+                err = "JOB DONE not found in {0}.out".format(file_prefix)
+                parameters["out_file"].write("QE job {0}.in did not complete!\n".format(file_prefix))
+                raise Exception("JOB DONE not found in {0}.out".format(file_prefix))
 
 def reduce_to_primitive(parameters):
 
@@ -672,9 +687,60 @@ def run(parameters, dry=False, aux_kpts=False):
     create_scf_in(parameters)
     run_qe("pw.x", "scf", parameters, dry=dry)
 
-    # Run elec-phonon calculation
-    create_elph_in(parameters)
-    run_qe("ph.x", "elph", parameters, dry=dry)
+    if parameters["irrep_group_size"] > 0:
+
+        # Run elec-phonon prep calculation
+        create_elph_in("elph_prep", parameters, irr_range=[0,0])
+        run_qe("ph.x", "elph_prep", parameters, dry=dry, check_done=False)
+
+        # Count q-points
+        qpoint_count = 0
+        with open("elph_prep.out") as elph_prep_f:
+            for line in elph_prep_f:
+                if "q-points):" in line:
+                    qpoint_count = int(line.split("q-points")[0].replace("(",""))
+                    break
+
+        parameters["out_file"].write("q-points to calculate: {0}\n".format(qpoint_count))
+
+        # Count irreps
+        irrep_counts = {}  
+        for i in range(1, qpoint_count+1):
+            with open("_ph0/pwscf.phsave/patterns.{0}.xml".format(i)) as pat_file:
+                next_line = False
+                for l in pat_file:
+                    if next_line:
+                        irrep_counts[i] = int(l)
+                        break
+                    if "NUMBER_IRR_REP" in l:
+                        next_line = True
+
+        for i in irrep_counts:
+            fs = "    irreducible representations for q-point {0}: {1}\n"
+            parameters["out_file"].write(fs.format(i, irrep_counts[i]))
+
+        gs = int(parameters["irrep_group_size"])
+
+        # Run elec-phonon calculations for each irrep group
+        for q_point in range(1, qpoint_count+1):
+            for irr in range(1, irrep_counts[q_point]+1, gs):
+                name = "elph_{0}_{1}_{2}".format(q_point, irr, irr+gs-1)
+                create_elph_in(name, parameters,
+                    irr_range=[irr, min(irr+gs-1, irrep_counts[q_point])], 
+                    q_range=[q_point, q_point])
+                run_qe("ph.x", name, parameters, dry=dry)
+
+        # Collect phonon results/diagonalise dynamical matrix
+        create_elph_in("elph_collect", parameters, force_recover=True)
+        run_qe("ph.x", "elph_collect", parameters, dry=dry)
+
+    else:
+        
+        # Just calculate all electron-phonon stuff in a single step
+        create_elph_in("elph_all", parameters)
+        run_qe("ph.x", "elph_all", parameters, dry=dry)
+
+    # Delete phonon files after successful elph run
     if parameters["disk_usage"] == "minimal":
         os.system("rm -r _ph0")
 
