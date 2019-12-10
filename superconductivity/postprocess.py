@@ -113,7 +113,7 @@ def get_tc_info(omega, a2f, mu, plot_fit=False, plot_errors=False, outf=None):
 
     except Exception as err:
         outf.write("Fit failed with errror:\n")
-        outf.write(err+"\n")
+        outf.write(str(err)+"\n")
 
         if plot_errors:
             import matplotlib.pyplot as plt

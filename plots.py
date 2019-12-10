@@ -215,6 +215,11 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
     for direc, data in all_data:
         v, f0, f300, p_dft, h_dft, e_dft, s = np.array(data).T
 
+        if len(h_dft) == 1:
+            pv = KBAR_AU3_TO_RY*p_dft[0]*v[0]
+            print(direc, f300, f300+pv, pv)
+            continue
+
         if hrel is None: hrel = CubicSpline(p_dft, h_dft)
         axes[0,0].plot(p_dft, (h_dft-hrel(p_dft))*RY_TO_MEV)
         axes[0,0].set_xlabel(r"$P_{DFT}$ (KBar)")
