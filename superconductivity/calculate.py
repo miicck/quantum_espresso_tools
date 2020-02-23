@@ -29,6 +29,7 @@ def default_parameters():
     "cores_per_node"   : cores,      # Number of cores per compute node
     "mpirun"           : "mpirun",   # Mpi caller (i.e mpirun or aprun)
     "elph"             : True,       # True if we are to calculate electron-phonon coupling
+    "relax_only"       : False,      # True if we are only to calculate relaxation
     "pressure"         : 0,          # Pressure in GPa
     "press_conv_thr"   : 0.5,        # Pressure convergence threshold
     "ecutwfc"          : 30,         # Plane wave cutoff in Ry
@@ -682,6 +683,9 @@ def run(parameters, dry=False, aux_kpts=False):
         relax_data = parse_vc_relax("relax.out")
         parameters["lattice"] = relax_data["lattice"]
         parameters["atoms"]   = relax_data["atoms"]
+
+    # Stop here if we're just doing relaxations
+    if parameters["relax_only"]: return
 
     # Run SCF with the new geometry
     create_scf_in(parameters)
