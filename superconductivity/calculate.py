@@ -69,7 +69,7 @@ def read_parameters(filename):
     i_ignored = []
     string_args = ["pseudo_dir", "disk_usage"]
     int_args    = ["nodes", "cores_per_node"]
-    bool_args   = ["elph"]
+    bool_args   = ["elph", "relax_only"]
 
     for i, l in enumerate(lines):
         
