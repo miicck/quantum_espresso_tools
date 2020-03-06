@@ -26,9 +26,12 @@ def plot_dos(ws, pdos, labels=None, fermi_energy=0):
         plt.legend()
     plt.axhline(0, color="black")
 
-# Plot a bandstructure (optionally specifying a file
-# with the indicies of the high symmetry points)
-def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_cross=False):
+# Plot a bandstructure, optionally specifying:
+#   hsp_file  = a file with the indicies of the high symmetry points
+#   lifetimes = the band lifetimes (plotted as widths)
+def plot_bands(qs, all_ws, ylabel, hsp_file=None, 
+    fermi_energy=0, resolve_band_cross=False,
+    lifetimes=None, omega_sq_norm_lifetimes=False):
 
     # Parse high symmetry points
     if hsp_file is None:
@@ -61,6 +64,8 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_c
     for i, iq in to_remove:
         del qs[iq]
         del all_ws[iq]
+        if not lifetimes is None:
+            del lifetimes[iq]
 
         # Move labels to compenstate for change
         for j in range(i, len(xtick_vals)):
@@ -74,6 +79,9 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_c
 
     # Attempt to sort out band crossings
     bands = np.array(all_ws)
+    if not lifetimes is None:
+        lifetimes = np.array(lifetimes)
+
     for iq in range(1, len(bands) - 1):
         if not resolve_band_cross: break
 
@@ -98,24 +106,52 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None, fermi_energy=0, resolve_band_c
                 if (extrap[it] < extrap[it-1]) != (bands[iq+1][it] < bands[iq+1][it-1]):
 
                     for iqs in range(iq+1, len(bands)):
-                        tmp = bands[iqs][it]
-                        bands[iqs][it]   = bands[iqs][it-1]
-                        bands[iqs][it-1] = tmp
+                        tmp                  = bands[iqs][it]
+                        bands[iqs][it]       = bands[iqs][it-1]
+                        bands[iqs][it-1]     = tmp
+
+                        if lifetimes is None: continue
+                        tmp                  = lifetimes[iqs][it]
+                        lifetimes[iqs][it]   = lifetimes[iqs][it-1]
+                        lifetimes[iqs][it-1] = tmp
 
                     swap_made = True
 
     bands = bands.T
+    if not lifetimes is None:
+        lifetimes = lifetimes.T
+
+    if omega_sq_norm_lifetimes:
+        for i in range(0, len(bands)):
+            for j in range(0, len(bands[i])):
+                if bands[i][j]**2 < 10e-6: continue
+                lifetimes[i][j] /= bands[i][j]**2
+        
+        lifetimes /= np.mean(lifetimes)
+        lifetimes *= 10
+    else:
+        lifetimes /= 10
 
     # Plot the bands between each successive pair
     # of discontinuities
     dc_pts.append(0)
     dc_pts.append(len(bands[0]))
     dc_pts.sort()
-    for band in bands:
+    for ibnd, band in enumerate(bands):
         for i in range(1, len(dc_pts)):
             s = dc_pts[i-1]
             f = dc_pts[i]
-            plt.plot(range(s,f),band[s:f]-fermi_energy,color=np.random.rand(3))
+            plt_col = np.random.rand(3)
+            if np.mean(plt_col) > 0.5:
+                plt_col /= 2*np.mean(plt_col)
+            plt.plot(range(s,f),band[s:f]-fermi_energy,color=plt_col)
+
+            if not lifetimes is None:
+                for ratio in np.linspace(0,0.5,10):
+                    plt.fill_between(range(s,f),
+                        band[s:f]-fermi_energy+lifetimes[ibnd][s:f]*ratio, 
+                        band[s:f]-fermi_energy-lifetimes[ibnd][s:f]*ratio,
+                        color=plt_col, alpha=0.1, edgecolor="none", linewidth=0.0)
 
     plt.axhline(0, color="black")
     plt.ylabel(ylabel)
@@ -259,6 +295,7 @@ def plot_gibbs_vs_pressure_simple(system_dirs):
         axes[0,1].plot(p0, (g0-grel300(p0))*RY_TO_MEV, linestyle=":", color=col)
         axes[0,1].set_xlabel(r"$P$ (KBar)")
         axes[0,1].set_ylabel(r"Gibbs free energy (meV/atom)")
+        axes[0,1].legend()
 
         g_dft300 = f300 + p_dft*v*KBAR_AU3_TO_RY
         if greldft is None: greldft = CubicSpline(p_dft, g_dft300)

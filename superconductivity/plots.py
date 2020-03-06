@@ -40,6 +40,8 @@ def plot_tc_vs_smearing_single(direc, show=True):
 
     sig_incr = 1.0
     elph_in = direc+"/elph.in"
+    if os.path.isfile(direc+"/elph_all.in"):
+        elph_in = direc+"/elph_all.in"
     if os.path.isfile(elph_in):
         lines = open(elph_in).read().split("\n")
         for l in lines:
