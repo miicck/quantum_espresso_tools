@@ -36,7 +36,9 @@ def default_parameters():
     "ecutrho"          : 300,        # Density cutoff in Ry
     "qpoint_spacing"   : 0.2,        # Q-point grid spacing in A^-1
     "kpts_per_qpt"     : [8, 8, 8],  # K-point grid (as multiple of q-point grid)
-    "aux_kpts"         : [6, 6, 6],  # Auxilliary k-point grid (as multiple of q-point grid)
+    "aux_kpts"         : None,       # Auxilliary k-point grid (as multiple of q-point grid)
+    "kpoint_grid"      : None,       # Explicit primary k-point grid (overrides kpts_per_qpt, 
+                                     # sets aux_kpts = None)
     "qpt_dense_mult"   : 10,         # Ratio of dense (interpolated) qpt grid to coarse q_point_grid
     "ph_ndos"          : 500,        # Number of points at which to calculate phonon DOS
     "band_kpts"        : 100,        # Points along the bandstructure
@@ -47,6 +49,7 @@ def default_parameters():
     "conv_thr"         : 1e-8,       # Electron energy convergence thresh (Ry)
     "symm_tol_cart"    : 0.001,      # Symmetry tolerance for frac coords
     "symm_tol_angle"   : 0.5,        # Symmetry tolerance for angles (degrees)
+    "require_prim_geom": True,       # If true error will be thrown if we can't reduce to prim geom
     "elph_nsig"        : 10,         # Number of smearing witdths to use
     "elph_dsig"        : 0.01,       # Spacing of smearing widths (Ry)
     "disk_usage"       : "normal",   # Set to 'minimal' to delete unnessacary files
@@ -69,7 +72,7 @@ def read_parameters(filename):
     i_ignored = []
     string_args = ["pseudo_dir", "disk_usage"]
     int_args    = ["nodes", "cores_per_node"]
-    bool_args   = ["elph", "relax_only"]
+    bool_args   = ["elph", "relax_only", "require_prim_geom"]
 
     for i, l in enumerate(lines):
         
@@ -152,7 +155,7 @@ def read_parameters(filename):
             ret["qpoint_grid"] = [int(q) for q in l.split()[1:4]]
             continue
 
-        # Parse primary/aux k-point grid
+        # Parse primary k-point grid
         elif key == "kpts_per_qpt":
             grid = [int(k) for k in l.split()[1:]]
             if   len(grid) == 3: ret[key] = grid
@@ -160,28 +163,32 @@ def read_parameters(filename):
             else: raise Exception("Could not parse kpts_per_qpts from : "+l)
             continue
 
-        # Parse primary/aux k-point grid
+        # Parse aux k-point grid
         elif key == "aux_kpts":
             try:    
                 grid = [int(k) for k in l.split()[1:4]]
                 if   len(grid) == 3: ret[key] = grid
                 elif len(grid) == 1: ret[key] = [grid[0], grid[0], grid[0]]
-                else: raise Exception("Could not parse aux_kpts from : "+l)
             except: 
                 ret[key] = None # No auxillary grid
             continue
+
+        # Parse explicit k-point grid
+        elif key == "kpoint_grid":
+            ret["kpoint_grid"] = [int(k) for k in l.split()[1:4]]
+            continue
                         
-        # Parse key-value pairs from the input file
+        # Parse simple key-value pairs from the input file
         val = l.split()[1]
 
         # Convert type for certain keys
         if   key in string_args : val = str(val)
         elif key in int_args    : val = int(val)
         elif key in bool_args   : val = val.lower().strip() == "true"
-        else                    : val = float(val)
+        else                    : val = float(val) # Default to float
 
         if key in ret: ret[key] = val
-        else: print("Unkown key when parsing {1}: {0}".format(key, filename))
+        else: raise Exception("Unkown key when parsing {1}: {0}".format(key, filename))
 
     return ret
 
@@ -625,11 +632,17 @@ def reduce_to_primitive(parameters):
         outf.write("Successfully reduced to primitive geometry using seekpath.\n")
 
     except ImportError:
-
-        outf = parameters["out_file"]
-        outf.write("Could not import seekpath =>\n")
-        outf.write("    1. We will not reduce to the primitive geometry\n")
-        outf.write("    2. We cannot obtain Brillouin zone paths => no bandstructure plots\n")
+        err  = "Could not import seekpath =>\n"
+        err += "  1. We cannot reduce to the primitive geometry\n"
+        err += "  2. We cannot obtain Brilloin zone paths\n"
+        err += "  3. 2 => we cannot calculate bandstructures\n"
+        parameters["out_file"].write(err)
+        
+        if parameters["require_prim_geom"]:
+            ex_mess  = "Could not reduce to primitive geometry/find BZ path. "
+            ex_mess += "Perhaps the version of python you're using does not "
+            ex_mess += "have access to the seeKpath module."
+            raise Exception(ex_mess)
 
     # Work out qpoint_grid
     if "qpoint_grid" in parameters:
@@ -648,11 +661,19 @@ def reduce_to_primitive(parameters):
     # Ensure we have at least 1 q-point in each direction
     parameters["qpoint_grid"] = [max(1,q) for q in parameters["qpoint_grid"]]
 
-    # Work out k-point grid from q-point grid and
-    # k-points per qpoint
-    kpq = parameters["kpts_per_qpt"]
-    qpg = parameters["qpoint_grid"]
-    parameters["kpoint_grid"] = [int(q*k) for q,k in zip(qpg, kpq)]
+    if parameters["kpoint_grid"] is None:
+        # Work out k-point grid from q-point grid and
+        # k-points per qpoint
+        kpq = parameters["kpts_per_qpt"]
+        qpg = parameters["qpoint_grid"]
+        parameters["kpoint_grid"] = [int(q*k) for q,k in zip(qpg, kpq)]
+        mess = "Generating k-point grid from q-point grid: {0}x{1}x{2}\n"
+    else:
+        # Use explicitly specified k-point grid
+        mess = "Using explicit k-point grid: {0}x{1}x{2}\n"
+
+    # Tell user the k-point grid we're using and how we got it
+    parameters["out_file"].write(mess.format(*parameters["kpoint_grid"]))
 
     # Return resulting new parameter set
     return parameters

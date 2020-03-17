@@ -121,16 +121,16 @@ def plot_bands(qs, all_ws, ylabel, hsp_file=None,
     if not lifetimes is None:
         lifetimes = lifetimes.T
 
-    if omega_sq_norm_lifetimes:
-        for i in range(0, len(bands)):
-            for j in range(0, len(bands[i])):
-                if bands[i][j]**2 < 10e-6: continue
-                lifetimes[i][j] /= bands[i][j]**2
-        
-        lifetimes /= np.mean(lifetimes)
-        lifetimes *= 10
-    else:
-        lifetimes /= 10
+        if omega_sq_norm_lifetimes:
+            for i in range(0, len(bands)):
+                for j in range(0, len(bands[i])):
+                    if bands[i][j]**2 < 10e-6: continue
+                    lifetimes[i][j] /= bands[i][j]**2
+            
+            lifetimes /= np.mean(lifetimes)
+            lifetimes *= 10
+        else:
+            lifetimes /= 10
 
     # Plot the bands between each successive pair
     # of discontinuities
